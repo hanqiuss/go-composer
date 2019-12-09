@@ -32,7 +32,6 @@ func FilterVersion(p Packages, vConStr string) *VersionPack {
 		fmt.Println("version error", vConStr)
 		return nil
 	}
-	constraint := Constraint{*constraints, "root"}
 
 	var list VersionPackageList
 	for k, v := range p {
@@ -42,7 +41,7 @@ func FilterVersion(p Packages, vConStr string) *VersionPack {
 			continue
 		}
 
-		ok := constraint.Check(version)
+		ok := constraints.Check(version)
 		if !ok {
 			delete(p, k)
 			continue
@@ -52,8 +51,7 @@ func FilterVersion(p Packages, vConStr string) *VersionPack {
 	if list == nil {
 		return nil
 	}
-	var cts []*Constraint
-	cts = append(cts, &constraint)
+	var cts = make([]*Constraint, 0)
 	sort.Sort(sort.Reverse(list))
 	return &VersionPack{cts, list}
 }

@@ -82,13 +82,9 @@ func getPackages(list map[string]string) {
 			continue
 		}
 		count++
-		go func(name string, ver string, ch chan int) {
+		go func(name, ver string, ch chan int) {
 			defer metaDataGettingList.Delete(name)
-			//fmt.Println(name, ver)
-			//if name == "symfony/browser-kit" {
 			_getPackage(&name, &ver)
-			//}
-
 			ch <- 1
 		}(name, ver, ch)
 	}
@@ -166,7 +162,9 @@ func _getPackage(name, ver *string) {
 		return
 	}
 	versionMap[*name] = versionPack
-	solver(versionPack.Package[0].p.MetaData, false, false)
+	if versionPack.Package[0].p.MetaData.Require != nil {
+		getPackages(versionPack.Package[0].p.MetaData.Require)
+	}
 }
 
 func getManifest(name *string, fileName *string) (ret []byte) {

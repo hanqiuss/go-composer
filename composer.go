@@ -17,7 +17,6 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	solver(metadata, true, true)
-	//fmt.Println(metadata.Name)
+	solver(metadata, "root")
 
 }
