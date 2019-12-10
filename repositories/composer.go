@@ -1,8 +1,9 @@
 package repositories
 
 import (
-	"composer/cache"
 	"encoding/json"
+	"fmt"
+	"go-composer/cache"
 	"io/ioutil"
 	"net/http"
 )
@@ -10,7 +11,7 @@ import (
 type Composer struct {
 	Url          string
 	ProvidersUrl string
-	Cache        cache.Base
+	Cache        *cache.Base
 }
 
 func NewComposer(url string) *Composer {
@@ -20,11 +21,11 @@ func NewComposer(url string) *Composer {
 	return &Composer{
 		Url:          url,
 		ProvidersUrl: "",
-		Cache:        cache.Base{},
+		Cache:        cache.NewCacheBase(),
 	}
 }
 
-func (c *Composer) GetPackages(name string) *JsonVersionPackages {
+func (c *Composer) GetPackages(name string) *Project {
 	url := c.getRepoUrl(name)
 	data := c.Cache.GetManifest(name, url)
 	var list JsonPackages
@@ -38,6 +39,7 @@ func (c *Composer) GetPackages(name string) *JsonVersionPackages {
 	if !parse {
 		data := c.getManifestRemote(url)
 		if len(data) == 0 || json.Unmarshal(data, &list) != nil {
+			fmt.Println("get manifest failed", url)
 			return nil
 		}
 		c.Cache.WriteManifest(name, data)
@@ -46,7 +48,12 @@ func (c *Composer) GetPackages(name string) *JsonVersionPackages {
 	if !ok {
 		return nil
 	}
-	return packages
+
+	return &Project{
+		Constraints: nil,
+		Packages:    getPackages(packages),
+		Repository:  c,
+	}
 }
 
 func (c *Composer) getManifestRemote(url string) (r []byte) {

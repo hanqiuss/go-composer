@@ -1,0 +1,131 @@
+package repositories
+
+import (
+	"fmt"
+	"github.com/Masterminds/semver"
+	"regexp"
+	"sort"
+	"strings"
+	"sync"
+)
+
+type JsonPackage struct {
+	Name        string
+	Description string
+	RequireDev  map[string]string `json:"require-dev"`
+	Require     map[string]string
+	Version     string
+	Dist        struct {
+		Type string
+		Url  string
+	}
+	Source struct {
+		Type string
+		Url  string
+	}
+}
+type JsonVersionPackages map[string]*JsonPackage
+type JsonPackages struct {
+	Packages map[string]*JsonVersionPackages // [name:Packages]
+}
+type Package struct {
+	v *semver.Version
+	p *JsonPackage
+}
+type Packages []*Package
+type Project struct {
+	Constraints []*semver.Constraints
+	Packages    *Packages
+	Repository  *Composer
+}
+
+func (p Packages) Len() int           { return len(p) }
+func (p Packages) Less(i, j int) bool { return p[i].GetVersion().LessThan(p[j].GetVersion()) }
+func (p Packages) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
+func (p *Package) GetVersion() *semver.Version {
+	return p.v
+}
+
+func getPackages(packages *JsonVersionPackages) *Packages {
+	ret := Packages{}
+	for v, p := range *packages {
+		version, err := semver.NewVersion(v)
+		if err != nil || version == nil {
+			continue
+		}
+		ret = append(ret, &Package{version, p})
+	}
+	sort.Sort(sort.Reverse(ret))
+	return &ret
+}
+
+var repo = NewComposer("")
+var depend = make(map[string]*Project)
+
+func GetDep(jsonPackage *JsonPackage) {
+	ch := make(chan int)
+	count := 0
+	for name, ver := range jsonPackage.Require {
+
+		ver = strings.ReplaceAll(strings.ReplaceAll(ver, "||", "|"), "|", "||")
+		ver = strings.ReplaceAll(ver, "@", "-")
+		if !filterRequire(&name, &ver) {
+			continue
+		}
+		count++
+		go func(name string) {
+			fmt.Println(name, ver)
+			defer metaDataGettingList.Delete(name)
+			ret := repo.GetPackages(name)
+			if ret != nil {
+				metaDataReadyList.Store(name, true)
+				depend[name] = ret
+				dep := (*ret.Packages)[0].p
+				GetDep(dep)
+			}
+			ch <- 1
+		}(name)
+	}
+	for count > 0 {
+		count--
+		<-ch
+	}
+}
+
+var metaDataReadyList sync.Map
+var metaDataGettingList sync.Map
+var failedList sync.Map
+
+func filterRequire(name, ver *string) bool {
+	_, ok := metaDataGettingList.Load(*name)
+	if ok {
+		return false
+	}
+	_, ok = failedList.Load(*name)
+	if ok {
+		return false
+	}
+	_, ok = metaDataReadyList.Load(*name)
+	if ok {
+		return false
+	}
+	ok, _ = regexp.MatchString("^php$", *name)
+	if ok {
+		return false
+	}
+	ok, _ = regexp.MatchString("^(ext|lib)-.*", *name)
+	if ok {
+		return false
+	}
+	_, err := semver.NewConstraint(*ver)
+	if err != nil {
+		fmt.Printf("require version %s error : %s\r\n", ver, err)
+		return false
+	}
+	_, ok = metaDataGettingList.LoadOrStore(*name, true)
+	if ok {
+		return false
+	}
+	return true
+}

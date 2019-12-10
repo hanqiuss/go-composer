@@ -56,7 +56,7 @@ func NewCacheBase() *Base {
 	return &ComposerCache
 }
 func (c *Base) GetManifest(name, url string) (r []byte) {
-	file := c.GetManifestPath(name)
+	file := c.getManifestPath(name)
 	info, err := os.Stat(file)
 	if err == nil {
 		resp, err := http.Head(url)
@@ -84,10 +84,10 @@ func (c *Base) GetManifest(name, url string) (r []byte) {
 	return
 }
 func (c *Base) getManifestPath(name string) string {
-	return filepath.Join(c.dir, c.manifestPre+strings.ReplaceAll(name, "/", "$")) + ".json"
+	return filepath.Join(c.repoDir, c.manifestPre+strings.ReplaceAll(name, "/", "$")) + ".json"
 }
 func (c *Base) WriteManifest(name string, body []byte) bool {
-	file := c.GetManifestPath(name)
+	file := c.getManifestPath(name)
 	err := ioutil.WriteFile(file, body, os.ModePerm)
 	return err == nil
 }
