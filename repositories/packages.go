@@ -69,6 +69,7 @@ func GetDep(jsonPackage *JsonPackage) map[string]*Project {
 	for name, ver := range jsonPackage.Require {
 		ver = strings.ReplaceAll(strings.ReplaceAll(ver, "||", "|"), "|", "||")
 		ver = strings.ReplaceAll(ver, "@", "-")
+		jsonPackage.Require[name] = ver
 		if !filterRequire(&name, &ver) {
 			continue
 		}
@@ -115,6 +116,9 @@ func filterRequire(name, ver *string) bool {
 	}
 	ok, _ = regexp.MatchString("^(ext|lib)-.*", *name)
 	if ok {
+		return false
+	}
+	if !strings.Contains(*name, "/") {
 		return false
 	}
 	_, err := semver.NewConstraint(*ver)

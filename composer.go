@@ -8,10 +8,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 func main() {
-
+	time1 := time.Now()
+	fmt.Println("start program in ", time.Now())
 	var file, err = os.Getwd()
 	if err != nil {
 		os.Exit(-1)
@@ -23,7 +25,7 @@ func main() {
 		os.Exit(-1)
 	}
 	solver.Solver(p)
-
+	fmt.Println("end , use time", time.Now().Sub(time1))
 }
 
 func ReadPackage(file string) (p *repositories.JsonPackage) {

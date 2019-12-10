@@ -5,6 +5,8 @@ import (
 	"github.com/Masterminds/semver"
 	"go-composer/repositories"
 	"sort"
+	"strings"
+	"time"
 )
 
 func Solver(p *repositories.JsonPackage) {
@@ -24,26 +26,31 @@ func Solver(p *repositories.JsonPackage) {
 		Packages:    &repositories.Packages{&repositories.Package{Version: rootVersion, Package: p}},
 		Repository:  nil,
 	}
-	setDep(dep)
-	for k, v := range dep {
-		fmt.Println(k, *v, v.Constraints)
-	}
-
+	dependList = dep
+	fmt.Println("start solve sat", time.Now())
+	setDep()
+	solveDep()
+	solveDep()
+	fmt.Println("11111")
 }
 
 var sel = make(map[string]int)
+var dependList map[string]*repositories.Project
 
-func setDep(dep map[string]*repositories.Project) {
-	for root, project := range dep {
+func setDep() {
+	for root, project := range dependList {
 		sel[root] = 0
 		for depName, v := range (*project.Packages)[0].Package.Require {
-			depPac, ok := dep[depName]
+			depPac, ok := dependList[depName]
 			if !ok {
-				fmt.Println("package lost", depName)
+				if strings.Contains(depName, "/") {
+					fmt.Println("package lost", depName)
+				}
 				continue
 			}
 			constr, err := semver.NewConstraint(v)
 			if err != nil {
+				fmt.Println("error constraints", depName, v)
 				continue
 			}
 			depPac.Constraints[root] = constr
@@ -51,8 +58,96 @@ func setDep(dep map[string]*repositories.Project) {
 	}
 }
 
-func solveDep(dep map[string]*repositories.Project) {
+func solveDep() {
+	sortDep := getSort(dependList)
+	for _, count := range sortDep {
+		if count.name == "root" {
+			continue
+		}
+		fmt.Println(*count)
+		ret := solveDepByName(count.name)
+		if !ret {
+			fmt.Println("solve error")
+			return
+		}
+	}
+}
+func solveDepByName(name string) bool {
+	cts := dependList[name].Constraints
+	for {
+	begin:
+		min := 10000000
+		minName := ""
+		ctsList := make([]*semver.Constraints, 0)
+		// get the top index of  the match version
+		for depByName := range cts {
+			if sel[depByName] >= len(*dependList[depByName].Packages) {
+				return false
+			}
+			str := (*dependList[depByName].Packages)[sel[depByName]].Package.Require[name]
+			curCts, err := semver.NewConstraint(str)
+			if err != nil {
+				sel[depByName]++
+				fmt.Println("error constraints ", str)
+				goto begin
+			}
+			index := getCheckVersionIndex(curCts, *dependList[depByName].Packages)
+			if index == len(*dependList[depByName].Packages) {
+				fmt.Printf("package %s need %s %s, no match", depByName, name, str)
+				return false
+			}
 
+			if min > index {
+				min = index
+				minName = depByName
+			}
+		}
+		// check is some version match all constraints
+		for ; min < len(*dependList[name].Packages); min++ {
+			p := (*dependList[name].Packages)[min]
+			check := true
+			for _, cts := range ctsList {
+				if !cts.Check(p.Version) {
+					check = false
+					break
+				}
+			}
+			if check {
+				sel[name] = min
+				return true
+			}
+		}
+		// downgrade the dependBy version which has the max require version(constraints)
+		_, ok := sel[minName]
+		if ok {
+			sel[minName]++
+		} else {
+			fmt.Println("no version match, require ", name)
+			for k, v := range cts {
+				fmt.Println(k, v)
+			}
+			for _, v := range *dependList[name].Packages {
+				fmt.Println(name, v.Version)
+			}
+			return false
+		}
+	}
+}
+
+func getCheckVersionIndex(cts *semver.Constraints, p repositories.Packages) int {
+	i := len(p)
+	for j := 0; j < i; j++ {
+		if p[j].Version == nil {
+			continue
+		}
+		if cts.Check(p[j].Version) {
+			i = j
+		}
+	}
+	if i == len(p) {
+		fmt.Println("no useful version ", cts, p[0].Package.Name)
+	}
+	return i
 }
 
 type depS struct {
@@ -80,6 +175,6 @@ func getSort(dep map[string]*repositories.Project) depSs {
 			count: count,
 		})
 	}
-	sort.Sort(sort.Reverse(depSort))
+	sort.Sort(depSort)
 	return depSort
 }
