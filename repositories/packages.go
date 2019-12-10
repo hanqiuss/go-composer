@@ -29,22 +29,22 @@ type JsonPackages struct {
 	Packages map[string]*JsonVersionPackages // [name:Packages]
 }
 type Package struct {
-	v *semver.Version
-	p *JsonPackage
+	Version *semver.Version
+	Package *JsonPackage
 }
 type Packages []*Package
 type Project struct {
-	Constraints []*semver.Constraints
+	Constraints map[string]*semver.Constraints
 	Packages    *Packages
 	Repository  *Composer
 }
 
 func (p Packages) Len() int           { return len(p) }
-func (p Packages) Less(i, j int) bool { return p[i].GetVersion().LessThan(p[j].GetVersion()) }
+func (p Packages) Less(i, j int) bool { return p[i].Version.LessThan(p[j].Version) }
 func (p Packages) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 func (p *Package) GetVersion() *semver.Version {
-	return p.v
+	return p.Version
 }
 
 func getPackages(packages *JsonVersionPackages) *Packages {
@@ -63,11 +63,10 @@ func getPackages(packages *JsonVersionPackages) *Packages {
 var repo = NewComposer("")
 var depend = make(map[string]*Project)
 
-func GetDep(jsonPackage *JsonPackage) {
+func GetDep(jsonPackage *JsonPackage) map[string]*Project {
 	ch := make(chan int)
 	count := 0
 	for name, ver := range jsonPackage.Require {
-
 		ver = strings.ReplaceAll(strings.ReplaceAll(ver, "||", "|"), "|", "||")
 		ver = strings.ReplaceAll(ver, "@", "-")
 		if !filterRequire(&name, &ver) {
@@ -75,13 +74,12 @@ func GetDep(jsonPackage *JsonPackage) {
 		}
 		count++
 		go func(name string) {
-			fmt.Println(name, ver)
 			defer metaDataGettingList.Delete(name)
 			ret := repo.GetPackages(name)
 			if ret != nil {
 				metaDataReadyList.Store(name, true)
 				depend[name] = ret
-				dep := (*ret.Packages)[0].p
+				dep := (*ret.Packages)[0].Package
 				GetDep(dep)
 			}
 			ch <- 1
@@ -91,6 +89,7 @@ func GetDep(jsonPackage *JsonPackage) {
 		count--
 		<-ch
 	}
+	return depend
 }
 
 var metaDataReadyList sync.Map
@@ -120,7 +119,7 @@ func filterRequire(name, ver *string) bool {
 	}
 	_, err := semver.NewConstraint(*ver)
 	if err != nil {
-		fmt.Printf("require version %s error : %s\r\n", ver, err)
+		fmt.Printf("require version %s error : %s\r\n", *ver, err)
 		return false
 	}
 	_, ok = metaDataGettingList.LoadOrStore(*name, true)

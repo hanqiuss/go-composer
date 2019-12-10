@@ -3,6 +3,7 @@ package repositories
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Masterminds/semver"
 	"go-composer/cache"
 	"io/ioutil"
 	"net/http"
@@ -50,7 +51,7 @@ func (c *Composer) GetPackages(name string) *Project {
 	}
 
 	return &Project{
-		Constraints: nil,
+		Constraints: make(map[string]*semver.Constraints),
 		Packages:    getPackages(packages),
 		Repository:  c,
 	}
