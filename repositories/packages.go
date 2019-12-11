@@ -10,23 +10,31 @@ import (
 )
 
 type JsonPackage struct {
-	Name        string
-	Description string
+	Name        string            `json:"name"`
+	Description string            `json:"name"`
 	RequireDev  map[string]string `json:"require-dev"`
-	Require     map[string]string
-	Version     string
+	Require     map[string]string `json:"require"`
+	Version     string            `json:"version"`
 	Dist        struct {
-		Type string
-		Url  string
-	}
+		Type      string `json:"type"`
+		Url       string `json:"url"`
+		Reference string `json:"reference"`
+	} `json:"dist"`
 	Source struct {
-		Type string
-		Url  string
-	}
+		Type      string `json:"type"`
+		Url       string `json:"url"`
+		Reference string `json:"reference"`
+	} `json:"source"`
+	Type     string                       `json:"type"`
+	AutoLoad map[string]map[string]string `json:"autoload"`
+	License  string                       `json:"license"`
 }
 type JsonVersionPackages map[string]*JsonPackage
 type JsonPackages struct {
 	Packages map[string]*JsonVersionPackages // [name:Packages]
+}
+type JsonLock struct {
+	Packages []JsonPackage
 }
 type Package struct {
 	Version *semver.Version

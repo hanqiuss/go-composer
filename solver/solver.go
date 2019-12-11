@@ -1,10 +1,13 @@
 package solver
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/Masterminds/semver"
 	"go-composer/cache"
 	"go-composer/repositories"
+	"io/ioutil"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -36,11 +39,13 @@ func Solver(p *repositories.JsonPackage) {
 	fmt.Println("check : ", checkDep())
 	count := 0
 	ch := make(chan int)
+	lock := repositories.JsonLock{}
 	for _, v := range install {
 		if v.Dist.Type != "zip" {
 			fmt.Println("dist type error", v)
 		} else {
 			count++
+			lock.Packages = append(lock.Packages, *v)
 			go func(p *repositories.JsonPackage, ch chan int) {
 				cacheObj := cache.NewCacheBase()
 				cacheObj.CacheFiles(p.Name, p.Dist.Url, p.Dist.Type)
@@ -51,6 +56,12 @@ func Solver(p *repositories.JsonPackage) {
 				ch <- 1
 			}(v, ch)
 		}
+	}
+	lockData, err := json.Marshal(lock)
+	if err != nil {
+		fmt.Println("json encode error ", err)
+	} else {
+		ioutil.WriteFile("composer.lock", lockData, os.ModePerm)
 	}
 	for count > 0 {
 		count--
