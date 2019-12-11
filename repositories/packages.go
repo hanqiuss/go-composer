@@ -35,7 +35,7 @@ type Package struct {
 type Packages []*Package
 type Project struct {
 	Constraints map[string]*semver.Constraints
-	Packages    *Packages
+	Packages    Packages
 	Repository  *Composer
 }
 
@@ -43,7 +43,7 @@ func (p Packages) Len() int           { return len(p) }
 func (p Packages) Less(i, j int) bool { return p[i].Version.LessThan(p[j].Version) }
 func (p Packages) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
-func getPackages(packages *JsonVersionPackages) *Packages {
+func getPackages(packages *JsonVersionPackages) Packages {
 	ret := Packages{}
 	for v, p := range *packages {
 		version, err := semver.NewVersion(v)
@@ -53,7 +53,7 @@ func getPackages(packages *JsonVersionPackages) *Packages {
 		ret = append(ret, &Package{version, p})
 	}
 	sort.Sort(sort.Reverse(ret))
-	return &ret
+	return ret
 }
 
 var repo = NewComposer("")
@@ -75,7 +75,7 @@ func GetDep(jsonPackage *JsonPackage) map[string]*Project {
 			if ret != nil {
 				metaDataReadyList.Store(name, true)
 				depend[name] = ret
-				dep := (*ret.Packages)[0].Package
+				dep := ret.Packages[0].Package
 				GetDep(dep)
 			}
 			ch <- 1

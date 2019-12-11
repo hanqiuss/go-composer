@@ -43,7 +43,7 @@ func (c *Composer) GetPackages(name string) *Project {
 			fmt.Println("get manifest failed", url)
 			return nil
 		}
-		c.Cache.WriteManifest(name, data)
+		c.Cache.CacheManifest(name, data)
 	}
 	packages, ok := list.Packages[name]
 	if !ok {

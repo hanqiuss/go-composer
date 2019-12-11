@@ -3,6 +3,7 @@ package solver
 import (
 	"fmt"
 	"github.com/Masterminds/semver"
+	"go-composer/cache"
 	"go-composer/repositories"
 	"sort"
 	"strings"
@@ -23,7 +24,7 @@ func Solver(p *repositories.JsonPackage) {
 	dep := repositories.GetDep(p)
 	dep["root"] = &repositories.Project{
 		Constraints: make(map[string]*semver.Constraints),
-		Packages:    &repositories.Packages{&repositories.Package{Version: rootVersion, Package: p}},
+		Packages:    repositories.Packages{&repositories.Package{Version: rootVersion, Package: p}},
 		Repository:  nil,
 	}
 	dependList = dep
@@ -31,17 +32,41 @@ func Solver(p *repositories.JsonPackage) {
 	setDep()
 	for solveDep() && !checkDep() {
 	}
+	install := getInstallList("root")
 	fmt.Println("check : ", checkDep())
+	count := 0
+	ch := make(chan int)
+	for _, v := range install {
+		if v.Dist.Type != "zip" {
+			fmt.Println("dist type error", v)
+		} else {
+			count++
+			go func(p *repositories.JsonPackage, ch chan int) {
+				cacheObj := cache.NewCacheBase()
+				cacheObj.CacheFiles(p.Name, p.Dist.Url, p.Dist.Type)
+				err := cacheObj.Install(p.Name, p.Dist.Url, p.Dist.Type)
+				if err != nil {
+					fmt.Println(err)
+				}
+				ch <- 1
+			}(v, ch)
+		}
+	}
+	for count > 0 {
+		count--
+		<-ch
+	}
 	fmt.Println("11111")
 }
 
 var sel = make(map[string]int)
 var dependList map[string]*repositories.Project
 
+/* set dependence link */
 func setDep() {
 	for root, project := range dependList {
 		sel[root] = 0
-		for depName, v := range (*project.Packages)[0].Package.Require {
+		for depName, v := range project.Packages[0].Package.Require {
 			depPac, ok := dependList[depName]
 			if !ok {
 				if strings.Contains(depName, "/") {
@@ -64,7 +89,6 @@ func solveDep() bool {
 		if count.name == "root" {
 			continue
 		}
-		fmt.Println(*count)
 		ret := solveDepByName(count.name)
 		if !ret {
 			fmt.Println("solve error")
@@ -82,10 +106,10 @@ func solveDepByName(name string) bool {
 		ctsList := make([]*semver.Constraints, 0)
 		// get the top index of  the match version
 		for depByName := range cts {
-			if sel[depByName] >= len(*dependList[depByName].Packages) {
+			if sel[depByName] >= len(dependList[depByName].Packages) {
 				return false
 			}
-			str, ok := (*dependList[depByName].Packages)[sel[depByName]].Package.Require[name]
+			str, ok := dependList[depByName].Packages[sel[depByName]].Package.Require[name]
 			if !ok {
 				continue
 			}
@@ -96,9 +120,9 @@ func solveDepByName(name string) bool {
 				fmt.Println("error constraints ", str)
 				goto begin
 			}
-			ps := *dependList[name].Packages
+			ps := dependList[name].Packages
 			index := getCheckVersionIndex(curCts, ps)
-			if index == len(*dependList[depByName].Packages) {
+			if index == len(dependList[depByName].Packages) {
 				fmt.Printf("package %s need %s %s, no match", depByName, name, str)
 				return false
 			}
@@ -111,10 +135,10 @@ func solveDepByName(name string) bool {
 		if len(ctsList) == 0 {
 			return true
 		}
-		n := len(*dependList[name].Packages)
+		n := len(dependList[name].Packages)
 		// check is some version match all constraints
 		for min < n {
-			p := (*dependList[name].Packages)[min]
+			p := (dependList[name].Packages)[min]
 			check := true
 			for _, cts := range ctsList {
 				if !cts.Check(p.Version) {
@@ -137,7 +161,7 @@ func solveDepByName(name string) bool {
 			for k, v := range cts {
 				fmt.Println(k, v)
 			}
-			for _, v := range *dependList[name].Packages {
+			for _, v := range dependList[name].Packages {
 				fmt.Println(name, v.Version)
 			}
 			return false
@@ -164,9 +188,9 @@ func checkDep() bool {
 		if name == "root" {
 			continue
 		}
-		ver := (*dependList[name].Packages)[sel[name]].Version
+		ver := dependList[name].Packages[sel[name]].Version
 		for depByName := range project.Constraints {
-			str, ok := (*dependList[depByName].Packages)[sel[depByName]].Package.Require[name]
+			str, ok := dependList[depByName].Packages[sel[depByName]].Package.Require[name]
 			if !ok {
 				continue
 			}
@@ -182,6 +206,24 @@ func checkDep() bool {
 
 	}
 	return true
+}
+func getInstallList(root string) (list map[string]*repositories.JsonPackage) {
+	list = make(map[string]*repositories.JsonPackage)
+	project, ok := dependList[root]
+	if !ok {
+		return
+	}
+	for name := range project.Packages[sel[root]].Package.Require {
+		p, ok := dependList[name]
+		if !ok {
+			continue
+		}
+		list[name] = p.Packages[sel[name]].Package
+		for k, v := range getInstallList(name) {
+			list[k] = v
+		}
+	}
+	return list
 }
 
 type depS struct {
