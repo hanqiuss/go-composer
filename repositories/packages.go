@@ -43,10 +43,6 @@ func (p Packages) Len() int           { return len(p) }
 func (p Packages) Less(i, j int) bool { return p[i].Version.LessThan(p[j].Version) }
 func (p Packages) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
-func (p *Package) GetVersion() *semver.Version {
-	return p.Version
-}
-
 func getPackages(packages *JsonVersionPackages) *Packages {
 	ret := Packages{}
 	for v, p := range *packages {
@@ -67,8 +63,7 @@ func GetDep(jsonPackage *JsonPackage) map[string]*Project {
 	ch := make(chan int)
 	count := 0
 	for name, ver := range jsonPackage.Require {
-		ver = strings.ReplaceAll(strings.ReplaceAll(ver, "||", "|"), "|", "||")
-		ver = strings.ReplaceAll(ver, "@", "-")
+		ver = ReWriteVersion(ver)
 		jsonPackage.Require[name] = ver
 		if !filterRequire(&name, &ver) {
 			continue
@@ -91,6 +86,10 @@ func GetDep(jsonPackage *JsonPackage) map[string]*Project {
 		<-ch
 	}
 	return depend
+}
+func ReWriteVersion(v string) string {
+	v = strings.ReplaceAll(strings.ReplaceAll(v, "||", "|"), "|", "||")
+	return strings.ReplaceAll(v, "@", "-")
 }
 
 var metaDataReadyList sync.Map
