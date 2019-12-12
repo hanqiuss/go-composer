@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"go-composer/util"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -90,6 +91,9 @@ func (c *Base) GetManifest(name, url string) (r []byte) {
 func (c *Base) getManifestPath(name string) string {
 	return filepath.Join(c.repoDir, c.manifestPre+strings.ReplaceAll(name, "/", "$")) + ".json"
 }
+func (c *Base) GetRepoDir() string {
+	return c.repoDir
+}
 func (c *Base) CacheManifest(name string, body []byte) bool {
 	file := c.getManifestPath(name)
 	err := ioutil.WriteFile(file, body, os.ModePerm)
@@ -141,9 +145,13 @@ func (c *Base) getFilePath(name, url, typ string) string {
 }
 
 func (c *Base) Install(name, url, typ string) error {
+	if name == "" {
+		return fmt.Errorf("install name empty, url : %s type : %s", url, typ)
+	}
 	file := c.getFilePath(name, url, typ)
 	p, err := os.Getwd()
 	if err != nil {
+		return fmt.Errorf("get cwd error %s", err)
 	}
 	p = filepath.Join(p, "/vendor/"+name)
 	return Unzip(p, file)
@@ -152,7 +160,10 @@ func Unzip(dir, zipFile string) error {
 
 	files, _ := ioutil.ReadDir(dir)
 	if len(files) > 0 {
-		os.RemoveAll(dir)
+		err := os.RemoveAll(dir)
+		if err != nil {
+			fmt.Printf("clear path %s error %s\r\n", dir, err)
+		}
 	}
 	if err := os.MkdirAll(dir, 0777); err != nil {
 		return err
@@ -162,7 +173,7 @@ func Unzip(dir, zipFile string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer util.Close(f)
 	info, err := f.Stat()
 	if err != nil {
 		return err
@@ -190,14 +201,14 @@ func Unzip(dir, zipFile string) error {
 		}
 		r, err := zf.Open()
 		if err != nil {
-			w.Close()
+			util.Close(w)
 			return fmt.Errorf("unzip %v: %v", zipFile, err)
 		}
 		lr := &io.LimitedReader{R: r, N: int64(zf.UncompressedSize64) + 1}
 		_, err = io.Copy(w, lr)
-		r.Close()
+		util.Close(r)
 		if err != nil {
-			w.Close()
+			util.Close(w)
 			return fmt.Errorf("unzip %v: %v", zipFile, err)
 		}
 		if err := w.Close(); err != nil {

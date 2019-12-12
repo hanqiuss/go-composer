@@ -1,15 +1,17 @@
 package solver
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/Masterminds/semver"
 	"go-composer/cache"
 	"go-composer/repositories"
 	"io/ioutil"
+	"math"
 	"os"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -26,71 +28,49 @@ func Solver(p *repositories.JsonPackage) {
 	}
 	dep := repositories.GetDep(p)
 	dep["root"] = &repositories.Project{
-		Constraints: make(map[string]*semver.Constraints),
+		Constraints: make(map[string]bool),
 		Packages:    repositories.Packages{&repositories.Package{Version: rootVersion, Package: p}},
 		Repository:  nil,
 	}
 	dependList = dep
 	fmt.Println("start solve sat", time.Now())
+
+	installList = getInstallList("root")
 	setDep()
-	for solveDep() && !checkDep() {
-	}
-	install := getInstallList("root")
-	fmt.Println("check : ", checkDep())
-	count := 0
-	ch := make(chan int)
-	lock := repositories.JsonLock{}
-	for _, v := range install {
-		if v.Dist.Type != "zip" {
-			fmt.Println("dist type error", v)
-		} else {
-			count++
-			lock.Packages = append(lock.Packages, *v)
-			go func(p *repositories.JsonPackage, ch chan int) {
-				cacheObj := cache.NewCacheBase()
-				cacheObj.CacheFiles(p.Name, p.Dist.Url, p.Dist.Type)
-				err := cacheObj.Install(p.Name, p.Dist.Url, p.Dist.Type)
-				if err != nil {
-					fmt.Println(err)
-				}
-				ch <- 1
-			}(v, ch)
+	for !checkDep() {
+		if !solveDep() {
+			fmt.Println("solver error")
+			return
 		}
+		installList = getInstallList("root")
+		setDep()
 	}
-	lockData, err := json.Marshal(lock)
-	if err != nil {
-		fmt.Println("json encode error ", err)
-	} else {
-		ioutil.WriteFile("composer.lock", lockData, os.ModePerm)
-	}
-	for count > 0 {
-		count--
-		<-ch
-	}
+	install()
+	//autoLoad()
 	fmt.Println("11111")
 }
 
 var sel = make(map[string]int)
 var dependList map[string]*repositories.Project
+var installList map[string]*repositories.JsonPackage
 
 /* set dependence link */
 func setDep() {
-	for root, project := range dependList {
-		sel[root] = 0
-		for depName, v := range project.Packages[0].Package.Require {
-			depPac, ok := dependList[depName]
+	for _, p := range dependList {
+		p.Constraints = make(map[string]bool)
+	}
+	for root, p := range installList {
+		for depName, ver := range p.Require {
+			_, ok := dependList[depName]
 			if !ok {
-				if strings.Contains(depName, "/") {
-					fmt.Println("package lost", depName)
-				}
 				continue
 			}
-			constr, err := semver.NewConstraint(v)
+			_, err := semver.NewConstraint(ver)
 			if err != nil {
-				fmt.Println("error constraints", depName, v)
+				fmt.Println("error constraints", depName, ver)
 				continue
 			}
-			depPac.Constraints[root] = constr
+			dependList[depName].Constraints[root] = true
 		}
 	}
 }
@@ -112,7 +92,7 @@ func solveDepByName(name string) bool {
 	cts := dependList[name].Constraints
 	for {
 	begin:
-		min := 10000000
+		min := math.MaxInt64
 		minName := ""
 		ctsList := make([]*semver.Constraints, 0)
 		// get the top index of  the match version
@@ -209,6 +189,7 @@ func checkDep() bool {
 			ct, err := semver.NewConstraint(str)
 			if err != nil {
 				fmt.Println("check error : error constraints", str)
+				continue
 			}
 			if !ct.Check(ver) {
 				return false
@@ -235,6 +216,46 @@ func getInstallList(root string) (list map[string]*repositories.JsonPackage) {
 		}
 	}
 	return list
+}
+func install() {
+	count := 0
+	ch := make(chan int)
+	lock := repositories.JsonLock{}
+	for _, v := range installList {
+		if v.Dist.Type != "zip" {
+			fmt.Println("dist type error", v)
+		} else {
+			count++
+			lock.Packages = append(lock.Packages, *v)
+			go func(p *repositories.JsonPackage, ch chan int) {
+				t1 := time.Now()
+				cacheObj := cache.NewCacheBase()
+				cacheObj.CacheFiles(p.Name, p.Dist.Url, p.Dist.Type)
+				err := cacheObj.Install(p.Name, p.Dist.Url, p.Dist.Type)
+				if err != nil {
+					fmt.Println(err)
+				}
+				fmt.Printf("install %s version %s time: %s\r\n", p.Name, p.Version, time.Now().Sub(t1))
+				ch <- 1
+			}(v, ch)
+		}
+	}
+	cData, _ := ioutil.ReadFile("composer.json")
+	h := md5.Sum(cData)
+	lock.Hash = hex.EncodeToString(h[:])
+	lockData, err := json.Marshal(lock)
+	if err != nil {
+		fmt.Println("json encode error ", err)
+		return
+	}
+	err = ioutil.WriteFile("composer.lock", lockData, os.ModePerm)
+	if err != nil {
+		fmt.Println("write lock file error ", err)
+	}
+	for count > 0 {
+		count--
+		<-ch
+	}
 }
 
 type depS struct {
