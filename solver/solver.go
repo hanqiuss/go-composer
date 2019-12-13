@@ -59,8 +59,7 @@ func setDep() {
 	for _, p := range dependList {
 		p.Constraints = make(map[string]bool)
 	}
-	list := installList
-	list["root"] = dependList["root"].Packages[0].Package
+	installList["root"] = dependList["root"].Packages[0].Package
 	for root, p := range installList {
 		for depName, ver := range p.Require {
 			_, ok := dependList[depName]
@@ -223,7 +222,10 @@ func install() {
 	count := 0
 	ch := make(chan int)
 	lock := repositories.JsonLock{}
-	for _, v := range installList {
+	for k, v := range installList {
+		if k == "root" {
+			continue
+		}
 		if v.Dist.Type != "zip" {
 			fmt.Println("dist type error", v)
 		} else {
