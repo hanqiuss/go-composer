@@ -59,6 +59,8 @@ func setDep() {
 	for _, p := range dependList {
 		p.Constraints = make(map[string]bool)
 	}
+	list := installList
+	list["root"] = dependList["root"].Packages[0].Package
 	for root, p := range installList {
 		for depName, ver := range p.Require {
 			_, ok := dependList[depName]
