@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -101,25 +102,8 @@ func (c *Base) CacheManifest(name string, body []byte) bool {
 }
 func (c *Base) CacheFiles(name, url, typ string) bool {
 	file := c.getFilePath(name, url, typ)
-	_, err := os.Stat(file)
-	if err == nil {
-		return true
-	}
-	resp, err := http.Get(url)
-	if err != nil || resp.StatusCode != 200 {
-		return false
-	}
-	defer func() {
-		err := resp.Body.Close()
-		if err != nil {
-			return
-		}
-	}()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return false
-	}
-	err = ioutil.WriteFile(file, body, os.ModePerm)
+	hash := path.Base(url)
+	_, err := util.DownloadAndSave(url, file, hash)
 	return err == nil
 }
 func (c *Base) GetFiles(name, url, typ string) []byte {
@@ -149,6 +133,8 @@ func (c *Base) Install(name, url, typ string) error {
 		return fmt.Errorf("install name empty, url : %s type : %s", url, typ)
 	}
 	file := c.getFilePath(name, url, typ)
+	hash := path.Base(url)
+	_, err := util.DownloadAndSave(url, file, hash)
 	p, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("get cwd error %s", err)

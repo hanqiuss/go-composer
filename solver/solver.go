@@ -149,7 +149,7 @@ func solveDepByName(name string) bool {
 		if ok {
 			sel[minName]++
 		} else {
-			fmt.Println("no version match, require ", name)
+			fmt.Println("no version match, require ", name, cts, ctsList)
 			for k, v := range cts {
 				fmt.Println(k, v)
 			}
@@ -234,7 +234,6 @@ func install() {
 			go func(p *repositories.JsonPackage, ch chan int) {
 				t1 := time.Now()
 				cacheObj := cache.NewCacheBase()
-				cacheObj.CacheFiles(p.Name, p.Dist.Url, p.Dist.Type)
 				err := cacheObj.Install(p.Name, p.Dist.Url, p.Dist.Type)
 				if err != nil {
 					fmt.Println(err)
