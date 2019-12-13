@@ -13,6 +13,8 @@ import (
 
 func main() {
 	time1 := time.Now()
+	/*	parse.Parse()
+		return*/
 	fmt.Println("start program in ", time.Now())
 	var file, err = os.Getwd()
 	if err != nil {

@@ -1,6 +1,7 @@
 package util
 
 import (
+	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -37,4 +38,8 @@ func Close(i io.Closer) {
 	err := i.Close()
 	if err != nil {
 	}
+}
+func MD5ToString(b []byte) string {
+	h := md5.Sum(b)
+	return hex.EncodeToString(h[:])
 }

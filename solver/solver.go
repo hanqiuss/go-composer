@@ -8,9 +8,11 @@ import (
 	"github.com/Masterminds/semver"
 	"go-composer/cache"
 	"go-composer/repositories"
+	"go-composer/template"
 	"io/ioutil"
 	"math"
 	"os"
+	"runtime"
 	"sort"
 	"time"
 )
@@ -114,7 +116,7 @@ func solveDepByName(name string) bool {
 			}
 			ps := dependList[name].Packages
 			index := getCheckVersionIndex(curCts, ps)
-			if index == len(dependList[depByName].Packages) {
+			if index == len(dependList[name].Packages) {
 				fmt.Printf("package %s need %s %s, no match", depByName, name, str)
 				return false
 			}
@@ -130,7 +132,7 @@ func solveDepByName(name string) bool {
 		n := len(dependList[name].Packages)
 		// check is some version match all constraints
 		for min < n {
-			p := (dependList[name].Packages)[min]
+			p := dependList[name].Packages[min]
 			check := true
 			for _, cts := range ctsList {
 				if !cts.Check(p.Version) {
@@ -145,19 +147,7 @@ func solveDepByName(name string) bool {
 			min++
 		}
 		// downgrade the dependBy version which has the max require version(constraints)
-		_, ok := sel[minName]
-		if ok {
-			sel[minName]++
-		} else {
-			fmt.Println("no version match, require ", name, cts, ctsList)
-			for k, v := range cts {
-				fmt.Println(k, v)
-			}
-			for _, v := range dependList[name].Packages {
-				fmt.Println(name, v.Version)
-			}
-			return false
-		}
+		sel[minName]++
 	}
 }
 func getCheckVersionIndex(cts *semver.Constraints, p repositories.Packages) int {
@@ -220,29 +210,25 @@ func getInstallList(root string) (list map[string]*repositories.JsonPackage) {
 }
 func install() {
 	count := 0
-	ch := make(chan int)
 	lock := repositories.JsonLock{}
-	for k, v := range installList {
-		if k == "root" {
-			continue
-		}
+	delete(installList, "root")
+	numCpu := runtime.NumCPU() * 2
+	pkgCh := make(chan *repositories.JsonPackage, numCpu)
+	resultCh := make(chan int, numCpu)
+	// run 4 concurrent parserWorkers
+	for i := 0; i < numCpu; i++ {
+		go installWorker(pkgCh, resultCh)
+	}
+	for _, v := range installList {
 		if v.Dist.Type != "zip" {
 			fmt.Println("dist type error", v)
 		} else {
 			count++
 			lock.Packages = append(lock.Packages, *v)
-			go func(p *repositories.JsonPackage, ch chan int) {
-				t1 := time.Now()
-				cacheObj := cache.NewCacheBase()
-				err := cacheObj.Install(p.Name, p.Dist.Url, p.Dist.Type)
-				if err != nil {
-					fmt.Println(err)
-				}
-				fmt.Printf("install %s version %s time: %s\r\n", p.Name, p.Version, time.Now().Sub(t1))
-				ch <- 1
-			}(v, ch)
+			go func(v *repositories.JsonPackage) { pkgCh <- v }(v)
 		}
 	}
+	// generated .lock file
 	cData, _ := ioutil.ReadFile("composer.json")
 	h := md5.Sum(cData)
 	lock.Hash = hex.EncodeToString(h[:])
@@ -257,7 +243,26 @@ func install() {
 	}
 	for count > 0 {
 		count--
-		<-ch
+		<-resultCh
+	}
+	close(pkgCh)
+	close(resultCh)
+	template.Generated(installList)
+}
+func installWorker(fileCh <-chan *repositories.JsonPackage, result chan<- int) {
+	cacheObj := cache.NewCacheBase()
+	for {
+		p, ok := <-fileCh
+		if !ok {
+			return
+		}
+		t1 := time.Now()
+		err := cacheObj.Install(p.Name, p.Dist.Url, p.Dist.Type)
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Printf("install %s version %s time: %s\r\n", p.Name, p.Version, time.Now().Sub(t1))
+		result <- 1
 	}
 }
 
