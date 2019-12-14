@@ -31,9 +31,10 @@ type JsonPackage struct {
 		Url       string `json:"url"`
 		Reference string `json:"reference"`
 	} `json:"source"`
-	Type     string                 `json:"type"`
-	AutoLoad map[string]interface{} `json:"autoload"`
-	License  interface{}            `json:"license"`
+	Type         string                 `json:"type"`
+	AutoLoad     map[string]interface{} `json:"autoload"`
+	License      interface{}            `json:"license"`
+	Repositories JsonRepositories       `json:"repositories"`
 }
 type JsonVersionPackages map[string]*JsonPackage
 type JsonPackages struct {
@@ -44,6 +45,11 @@ type JsonLock struct {
 	Packages    []JsonPackage `json:"packages"`
 	PackagesDev []JsonPackage `json:"packages-dev"`
 }
+type JsonRepository struct {
+	Type string `json:"type"`
+	Url  string `json:"url"`
+}
+type JsonRepositories []JsonRepository
 type Package struct {
 	Version *semver.Version
 	Package *JsonPackage
@@ -58,3 +64,8 @@ type Project struct {
 func (p Packages) Len() int           { return len(p) }
 func (p Packages) Less(i, j int) bool { return p[i].Version.LessThan(p[j].Version) }
 func (p Packages) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
+type Repository interface {
+	GetPackages(name string) *Project
+	Has(name string) bool
+}

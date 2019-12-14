@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/yookoala/realpath"
 	"github.com/z7zmey/php-parser/parser"
 	"github.com/z7zmey/php-parser/php7"
 	"io/ioutil"
@@ -51,12 +50,16 @@ func Parse(dirs []Dir) map[string]string {
 
 func processPath(pathList []Dir, fileCh chan<- *file) {
 	for _, path := range pathList {
-		realP, err := realpath.Realpath(path.Path)
-		checkErr(err)
 
-		err = filepath.Walk(realP, func(fPath string, f os.FileInfo, err error) error {
+		err := filepath.Walk(path.Path, func(fPath string, f os.FileInfo, err error) error {
 			if f.IsDir() && len(path.Exclude) > 0 {
-				fmt.Println(fPath, filepath.Join(path.Path, path.Exclude[0]))
+				for _, exclude := range path.Exclude {
+					exclude = strings.ReplaceAll(exclude, "**", "")
+					if fPath == filepath.Join(path.Path, exclude) {
+						fmt.Println(fPath, filepath.Join(path.Path, path.Exclude[0]))
+						return filepath.SkipDir
+					}
+				}
 			}
 			if !f.IsDir() && filepath.Ext(fPath) == ".php" {
 				wg.Add(1)

@@ -9,6 +9,7 @@ import (
 	"go-composer/cache"
 	"go-composer/repositories"
 	"go-composer/template"
+	"go-composer/util"
 	"io/ioutil"
 	"math"
 	"os"
@@ -21,9 +22,9 @@ func Solver(p *repositories.JsonPackage) {
 	if p.Require == nil {
 		p.Require = make(map[string]string)
 	}
-	for name, v := range p.RequireDev {
+	/*	for name, v := range p.RequireDev {
 		p.Require[name] = v
-	}
+	}*/
 	rootVersion, err := semver.NewVersion(p.Version)
 	if err != nil {
 		rootVersion = nil
@@ -47,6 +48,7 @@ func Solver(p *repositories.JsonPackage) {
 		installList = getInstallList("root")
 		setDep()
 	}
+	fmt.Println("end solve sat", time.Now())
 	install()
 	//autoLoad()
 	fmt.Println("11111")
@@ -85,7 +87,7 @@ func solveDep() bool {
 		}
 		ret := solveDepByName(count.name)
 		if !ret {
-			fmt.Println("solve error")
+			fmt.Println("solve error", count.name)
 			return false
 		}
 	}
@@ -107,7 +109,7 @@ func solveDepByName(name string) bool {
 			if !ok {
 				continue
 			}
-			str = repositories.ReWriteVersion(str)
+			str = util.ReWriteVersion(str)
 			curCts, err := semver.NewConstraint(str)
 			if err != nil {
 				sel[depByName]++
@@ -176,7 +178,7 @@ func checkDep() bool {
 			if !ok {
 				continue
 			}
-			str = repositories.ReWriteVersion(str)
+			str = util.ReWriteVersion(str)
 			ct, err := semver.NewConstraint(str)
 			if err != nil {
 				fmt.Println("check error : error constraints", str)

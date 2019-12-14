@@ -3,36 +3,23 @@ package repositories
 import (
 	"fmt"
 	"github.com/Masterminds/semver"
+	"go-composer/util"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 )
 
-func getPackages(packages *JsonVersionPackages) Packages {
-	ret := Packages{}
-	for v, p := range *packages {
-		version, err := semver.NewVersion(v)
-		if err != nil || version == nil {
-			continue
-		}
-		ret = append(ret, &Package{version, p})
-	}
-	sort.Sort(sort.Reverse(ret))
-	return ret
-}
-
-var repo = NewComposer("")
 var depend = make(map[string]*Project)
+var repoList map[string]Repository
 
 func GetDep(jsonPackage *JsonPackage) map[string]*Project {
-	//err := repo.Init()
-	//fmt.Println(err)
-
+	if repoList == nil {
+		repoList = CreateManager(jsonPackage)
+	}
 	ch := make(chan int)
 	count := 0
 	for name, ver := range jsonPackage.Require {
-		ver = ReWriteVersion(ver)
+		ver = util.ReWriteVersion(ver)
 		jsonPackage.Require[name] = ver
 		if !FilterRequire(&name, &ver) {
 			continue
@@ -40,13 +27,25 @@ func GetDep(jsonPackage *JsonPackage) map[string]*Project {
 		count++
 		go func(name string) {
 			defer metaDataGettingList.Delete(name)
-			ret := repo.GetPackages(name)
-			if ret != nil {
-				metaDataReadyList.Store(name, true)
-				depend[name] = ret
-				for _, v := range ret.Packages {
-					GetDep(v.Package)
+			has := false
+			for _, repo := range repoList {
+				if repo.Has(name) {
+					has = true
+					ret := repo.GetPackages(name)
+					if ret != nil {
+						metaDataReadyList.Store(name, true)
+						depend[name] = ret
+						for _, v := range ret.Packages {
+							GetDep(v.Package)
+						}
+					} else {
+						failedList.Store(name, true)
+						fmt.Println("get package failed", name, repo)
+					}
 				}
+			}
+			if !has {
+				fmt.Println("lose package : ", name)
 			}
 			ch <- 1
 		}(name)
@@ -56,10 +55,6 @@ func GetDep(jsonPackage *JsonPackage) map[string]*Project {
 		<-ch
 	}
 	return depend
-}
-func ReWriteVersion(v string) string {
-	v = strings.ReplaceAll(strings.ReplaceAll(v, "||", "|"), "|", "||")
-	return strings.ReplaceAll(v, "@", "-")
 }
 
 var metaDataReadyList sync.Map
@@ -92,7 +87,7 @@ func FilterRequire(name, ver *string) bool {
 	}
 	_, err := semver.NewConstraint(*ver)
 	if err != nil {
-		fmt.Printf("require version %s error : %s\r\n", *ver, err)
+		//fmt.Printf("require version%s %s error : %s\r\n",*name, *ver, err)
 		return false
 	}
 	_, ok = metaDataGettingList.LoadOrStore(*name, true)

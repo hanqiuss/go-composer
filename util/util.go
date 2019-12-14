@@ -1,7 +1,6 @@
 package util
 
 import (
-	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -9,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 )
 
 func DownloadAndSave(url, file, hash string) (body []byte, err error) {
@@ -39,7 +39,12 @@ func Close(i io.Closer) {
 	if err != nil {
 	}
 }
-func MD5ToString(b []byte) string {
+
+/*func MD5ToString(b []byte) string {
 	h := md5.Sum(b)
 	return hex.EncodeToString(h[:])
+}*/
+func ReWriteVersion(v string) string {
+	v = strings.ReplaceAll(strings.ReplaceAll(v, "||", "|"), "|", "||")
+	return strings.ReplaceAll(v, "@", "-")
 }

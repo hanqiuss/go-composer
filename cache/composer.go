@@ -8,7 +8,7 @@ import (
 	"go-composer/util"
 	"io"
 	"io/ioutil"
-	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -35,7 +35,7 @@ func NewCacheBase() *Base {
 		cacheDir = filepath.Join(getCwd, "cache$$")
 	}
 	cacheDir = filepath.Join(cacheDir, "Composer")
-	repoDir := filepath.Join(cacheDir, "repo", "https---repo.packagist.org")
+	repoDir := filepath.Join(cacheDir, "repo")
 	cacheFileDir := filepath.Join(cacheDir, "files")
 	_, err := os.Stat(repoDir)
 	if err != nil {
@@ -61,45 +61,26 @@ func NewCacheBase() *Base {
 	}
 	return &ComposerCache
 }
-func (c *Base) GetManifest(name, url string) (r []byte) {
-	file := c.getManifestPath(name)
-	info, err := os.Stat(file)
-	if err == nil {
-		resp, err := http.Head(url)
-		if err != nil {
-			fmt.Println("get url failed : ", url)
-		} else {
-			timeStr := resp.Header.Get("date")
-			if timeStr == "" { //read from url
-				return
-			}
-			time, err := http.ParseTime(timeStr)
-			if err != nil {
-				return nil
-			}
-			if time.After(info.ModTime()) {
-				return
-			}
-		}
-		ret, err := ioutil.ReadFile(file)
-		if err != nil {
-			return
-		}
-		return ret
+func (c *Base) GetManifest(name, urlStr, hash string) (r []byte) {
+	urlObj, err := url.Parse(urlStr)
+	if err != nil {
+		fmt.Println("cache : urlStr error ", err)
+		return
 	}
-	return
+	name = c.manifestPre + strings.ReplaceAll(name, "/", "$") + ".json"
+
+	file := filepath.Join(c.GetRepoDir(urlObj.Host), name)
+	r, err = util.DownloadAndSave(urlStr, file, hash)
+	if err != nil {
+		fmt.Println("cache : get manifest error : ", err)
+		return
+	}
+	return r
 }
-func (c *Base) getManifestPath(name string) string {
-	return filepath.Join(c.repoDir, c.manifestPre+strings.ReplaceAll(name, "/", "$")) + ".json"
+func (c *Base) GetRepoDir(host string) string {
+	return filepath.Join(c.repoDir, "https---"+host)
 }
-func (c *Base) GetRepoDir() string {
-	return c.repoDir
-}
-func (c *Base) CacheManifest(name string, body []byte) bool {
-	file := c.getManifestPath(name)
-	err := ioutil.WriteFile(file, body, os.ModePerm)
-	return err == nil
-}
+
 func (c *Base) CacheFiles(name, url, typ string) bool {
 	file := c.getFilePath(name, url, typ)
 	hash := path.Base(url)
@@ -127,7 +108,11 @@ func (c *Base) getFilePath(name, url, typ string) string {
 	h := sha1.Sum([]byte(url))
 	return filepath.Join(dir, hex.EncodeToString(h[:])) + "." + typ
 }
-
+func (c *Base) CreateManifestDir(host string) {
+	err := os.MkdirAll(filepath.Join(c.repoDir, "https---"+host), os.ModePerm)
+	if err != nil {
+	}
+}
 func (c *Base) Install(name, url, typ string) error {
 	if name == "" {
 		return fmt.Errorf("install name empty, url : %s type : %s", url, typ)
