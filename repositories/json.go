@@ -58,7 +58,28 @@ type Packages []*Package
 type Project struct {
 	Constraints map[string]bool
 	Packages    Packages
-	Repository  *Composer
+}
+
+type JsonNpmPackage struct {
+	Name        string            `json:"name"`
+	Description string            `json:"description"`
+	RequireDev  map[string]string `json:"require-dev"`
+	Require     map[string]string `json:"dependencies"`
+	Version     string            `json:"version"`
+	Dist        struct {
+		Type      string `json:"type"`
+		Url       string `json:"tarball"`
+		Reference string `json:"reference"`
+	} `json:"dist"`
+	Source struct {
+		Type string `json:"type"`
+		Url  string `json:"url"`
+	} `json:"repository"`
+	License interface{} `json:"license"`
+}
+type JsonNpmVersionPackage map[string]*JsonNpmPackage
+type JsonNpmPackages struct {
+	Versions JsonNpmVersionPackage
 }
 
 func (p Packages) Len() int           { return len(p) }
@@ -68,4 +89,36 @@ func (p Packages) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 type Repository interface {
 	GetPackages(name string) *Project
 	Has(name string) bool
+}
+
+func JsonNpmToComposer(npm *JsonNpmPackage) *JsonPackage {
+	return &JsonPackage{
+		Name:        npm.Name,
+		Description: npm.Version,
+		RequireDev:  npm.RequireDev,
+		Require:     npm.Require,
+		Version:     npm.Version,
+		Dist: struct {
+			Type      string `json:"type"`
+			Url       string `json:"url"`
+			Reference string `json:"reference"`
+		}{
+			Type:      "tgz",
+			Url:       npm.Dist.Url,
+			Reference: "",
+		},
+		Source: struct {
+			Type      string `json:"type"`
+			Url       string `json:"url"`
+			Reference string `json:"reference"`
+		}{
+			Type:      npm.Source.Type,
+			Url:       npm.Source.Url,
+			Reference: "",
+		},
+		Type:         "",
+		AutoLoad:     nil,
+		License:      npm.License,
+		Repositories: nil,
+	}
 }

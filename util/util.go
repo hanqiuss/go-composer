@@ -11,12 +11,40 @@ import (
 	"strings"
 )
 
-func DownloadAndSave(url, file, hash string) (body []byte, err error) {
+func DownloadAndSaveWithHash(url, file, hash string) (body []byte, err error) {
 	data, err := ioutil.ReadFile(file)
 	if len(data) > 0 {
 		h := sha256.Sum256(data)
 		if hash == hex.EncodeToString(h[:]) {
 			return data, nil
+		}
+	}
+	res, err := http.Get(url)
+	if err != nil || res.StatusCode != 200 {
+		return body, fmt.Errorf("get url error %s %s", url, err)
+	}
+	body, err = ioutil.ReadAll(res.Body)
+	defer Close(res.Body)
+	if err != nil {
+		return body, fmt.Errorf("read http body error %s", err)
+	}
+	err = ioutil.WriteFile(file, body, os.ModePerm)
+	if err != nil {
+		return body, fmt.Errorf("write file error %s", err)
+	}
+	return
+}
+func DownloadAndSave(url, file string) (body []byte, err error) {
+	fInfo, err := os.Stat(file)
+	if err == nil {
+		resp, err := http.Head(url)
+		if err == nil && resp.StatusCode == 200 {
+			d, err := http.ParseTime(resp.Header.Get("Date"))
+			if err == nil && !d.After(fInfo.ModTime()) {
+				return ioutil.ReadFile(file)
+			} else {
+				fmt.Println("util : date expire ", fInfo.ModTime(), d)
+			}
 		}
 	}
 	res, err := http.Get(url)

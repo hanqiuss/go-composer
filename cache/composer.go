@@ -1,7 +1,9 @@
 package cache
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"compress/gzip"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
@@ -61,7 +63,7 @@ func NewCacheBase() *Base {
 	}
 	return &ComposerCache
 }
-func (c *Base) GetManifest(name, urlStr, hash string) (r []byte) {
+func (c *Base) GetManifestWithHash(name, urlStr, hash string) (r []byte) {
 	urlObj, err := url.Parse(urlStr)
 	if err != nil {
 		fmt.Println("cache : urlStr error ", err)
@@ -70,7 +72,23 @@ func (c *Base) GetManifest(name, urlStr, hash string) (r []byte) {
 	name = c.manifestPre + strings.ReplaceAll(name, "/", "$") + ".json"
 
 	file := filepath.Join(c.GetRepoDir(urlObj.Host), name)
-	r, err = util.DownloadAndSave(urlStr, file, hash)
+	r, err = util.DownloadAndSaveWithHash(urlStr, file, hash)
+	if err != nil {
+		fmt.Println("cache : get manifest error : ", err)
+		return
+	}
+	return r
+}
+func (c *Base) GetManifest(name, urlStr string) (r []byte) {
+	urlObj, err := url.Parse(urlStr)
+	if err != nil {
+		fmt.Println("cache : urlStr error ", err)
+		return
+	}
+	name = c.manifestPre + strings.ReplaceAll(name, "/", "$") + ".json"
+
+	file := filepath.Join(c.GetRepoDir(urlObj.Host), name)
+	r, err = util.DownloadAndSave(urlStr, file)
 	if err != nil {
 		fmt.Println("cache : get manifest error : ", err)
 		return
@@ -84,7 +102,7 @@ func (c *Base) GetRepoDir(host string) string {
 func (c *Base) CacheFiles(name, url, typ string) bool {
 	file := c.getFilePath(name, url, typ)
 	hash := path.Base(url)
-	_, err := util.DownloadAndSave(url, file, hash)
+	_, err := util.DownloadAndSaveWithHash(url, file, hash)
 	return err == nil
 }
 func (c *Base) GetFiles(name, url, typ string) []byte {
@@ -119,27 +137,25 @@ func (c *Base) Install(name, url, typ string) error {
 	}
 	file := c.getFilePath(name, url, typ)
 	hash := path.Base(url)
-	_, err := util.DownloadAndSave(url, file, hash)
+	_, err := util.DownloadAndSaveWithHash(url, file, hash)
 	p, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("get cwd error %s", err)
 	}
 	p = filepath.Join(p, "/vendor/"+name)
+	switch typ {
+	case "zip":
+		return Unzip(p, file)
+	case "tgz":
+		return UnTgz(p, file)
+	}
 	return Unzip(p, file)
 }
 func Unzip(dir, zipFile string) error {
-
-	files, _ := ioutil.ReadDir(dir)
-	if len(files) > 0 {
-		err := os.RemoveAll(dir)
-		if err != nil {
-			fmt.Printf("clear path %s error %s\r\n", dir, err)
-		}
-	}
-	if err := os.MkdirAll(dir, 0777); err != nil {
+	err := clearDir(dir)
+	if err != nil {
 		return err
 	}
-
 	f, err := os.Open(zipFile)
 	if err != nil {
 		return err
@@ -163,7 +179,7 @@ func Unzip(dir, zipFile string) error {
 		name := strings.SplitN(zf.Name, "/", 2)
 		dst := filepath.Join(dir, name[1])
 		if err := os.MkdirAll(filepath.Dir(dst), 0777); err != nil {
-			fmt.Println("123", filepath.Dir(dst))
+			fmt.Println("cache install error : ", filepath.Dir(dst))
 			return err
 		}
 		w, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0777)
@@ -190,5 +206,53 @@ func Unzip(dir, zipFile string) error {
 		}
 	}
 
+	return nil
+}
+func UnTgz(dir, tgzFile string) error {
+	err := clearDir(dir)
+	if err != nil {
+		return err
+	}
+	f, err := os.Open(tgzFile)
+	if err != nil {
+		return err
+	}
+	defer util.Close(f)
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return err
+	}
+	defer util.Close(gz)
+	tr := tar.NewReader(gz)
+	for h, err := tr.Next(); err == nil; h, err = tr.Next() {
+		fName := strings.Replace(h.Name, "package/", "", 1)
+		fName = filepath.Join(dir, fName)
+		if err := os.MkdirAll(filepath.Dir(fName), 0777); err != nil {
+			fmt.Println("cache install error : ", filepath.Dir(fName))
+			return err
+		}
+		w, err := os.OpenFile(fName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0777)
+		if err != nil {
+			return fmt.Errorf("ungzip : create file error %v: %v", tgzFile, err)
+		}
+		_, err = io.Copy(w, tr)
+		util.Close(w)
+		if err != nil {
+			return fmt.Errorf("ungzip : write data error %s", fName)
+		}
+	}
+	return nil
+}
+func clearDir(dir string) error {
+	files, _ := ioutil.ReadDir(dir)
+	if len(files) > 0 {
+		err := os.RemoveAll(dir)
+		if err != nil {
+			fmt.Printf("clear path %s error %s\r\n", dir, err)
+		}
+	}
+	if err := os.MkdirAll(dir, 0777); err != nil {
+		return err
+	}
 	return nil
 }

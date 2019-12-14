@@ -33,7 +33,6 @@ func Solver(p *repositories.JsonPackage) {
 	dep["root"] = &repositories.Project{
 		Constraints: make(map[string]bool),
 		Packages:    repositories.Packages{&repositories.Package{Version: rootVersion, Package: p}},
-		Repository:  nil,
 	}
 	dependList = dep
 	fmt.Println("start solve sat", time.Now())
@@ -222,7 +221,7 @@ func install() {
 		go installWorker(pkgCh, resultCh)
 	}
 	for _, v := range installList {
-		if v.Dist.Type != "zip" {
+		if v.Dist.Type != "zip" && v.Dist.Type != "tgz" {
 			fmt.Println("dist type error", v)
 		} else {
 			count++
