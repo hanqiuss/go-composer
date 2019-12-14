@@ -1,7 +1,10 @@
 package repositories
 
 import (
-	"github.com/Masterminds/semver"
+	"go-composer/semver"
+	"go-composer/util"
+	"sort"
+	"strings"
 )
 
 type JsonRepos struct {
@@ -15,25 +18,24 @@ type JsonProvider struct {
 type JsonProvPack struct {
 	Providers map[string]*JsonProvider
 }
+type JsonDist struct {
+	Type      string `json:"type"`
+	Url       string `json:"url"`
+	Reference string `json:"reference"`
+}
+type JsonSource JsonDist
 type JsonPackage struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	RequireDev  map[string]string `json:"require-dev"`
-	Require     map[string]string `json:"require"`
-	Version     string            `json:"version"`
-	Dist        struct {
-		Type      string `json:"type"`
-		Url       string `json:"url"`
-		Reference string `json:"reference"`
-	} `json:"dist"`
-	Source struct {
-		Type      string `json:"type"`
-		Url       string `json:"url"`
-		Reference string `json:"reference"`
-	} `json:"source"`
+	Name         string                 `json:"name"`
+	Version      string                 `json:"version"`
+	Source       *JsonSource            `json:"source"`
+	Dist         *JsonDist              `json:"dist"`
+	Require      map[string]string      `json:"require"`
+	RequireDev   map[string]string      `json:"require-dev"`
 	Type         string                 `json:"type"`
-	AutoLoad     map[string]interface{} `json:"autoload"`
+	Extra        interface{}            `json:"extra"`
 	License      interface{}            `json:"license"`
+	AutoLoad     map[string]interface{} `json:"autoload"`
+	Description  string                 `json:"description"`
 	Repositories JsonRepositories       `json:"repositories"`
 }
 type JsonVersionPackages map[string]*JsonPackage
@@ -41,10 +43,15 @@ type JsonPackages struct {
 	Packages map[string]*JsonVersionPackages // [name:Packages]
 }
 type JsonLock struct {
-	Hash        string        `json:"hash"`
-	Packages    []JsonPackage `json:"packages"`
-	PackagesDev []JsonPackage `json:"packages-dev"`
+	Hash        string     `json:"hash"`
+	Packages    ColJsonPkg `json:"packages"`
+	PackagesDev ColJsonPkg `json:"packages-dev"`
 }
+
+func (l *JsonLock) Sort() {
+	sort.Sort(l.Packages)
+}
+
 type JsonRepository struct {
 	Type string `json:"type"`
 	Url  string `json:"url"`
@@ -54,7 +61,7 @@ type Package struct {
 	Version *semver.Version
 	Package *JsonPackage
 }
-type Packages []*Package
+
 type Project struct {
 	Constraints map[string]bool
 	Packages    Packages
@@ -66,10 +73,11 @@ type JsonNpmPackage struct {
 	RequireDev  map[string]string `json:"require-dev"`
 	Require     map[string]string `json:"dependencies"`
 	Version     string            `json:"version"`
+	GitHead     string            `json:"gitHead"`
 	Dist        struct {
-		Type      string `json:"type"`
-		Url       string `json:"tarball"`
-		Reference string `json:"reference"`
+		Type   string `json:"type"`
+		Url    string `json:"tarball"`
+		ShaSum string `json:"shasum"`
 	} `json:"dist"`
 	Source struct {
 		Type string `json:"type"`
@@ -81,6 +89,14 @@ type JsonNpmVersionPackage map[string]*JsonNpmPackage
 type JsonNpmPackages struct {
 	Versions JsonNpmVersionPackage
 }
+
+type ColJsonPkg []*JsonPackage
+
+func (p ColJsonPkg) Len() int           { return len(p) }
+func (p ColJsonPkg) Less(i, j int) bool { return p[i].Name < p[j].Name }
+func (p ColJsonPkg) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
+type Packages []*Package
 
 func (p Packages) Len() int           { return len(p) }
 func (p Packages) Less(i, j int) bool { return p[i].Version.LessThan(p[j].Version) }
@@ -98,23 +114,15 @@ func JsonNpmToComposer(npm *JsonNpmPackage) *JsonPackage {
 		RequireDev:  npm.RequireDev,
 		Require:     npm.Require,
 		Version:     npm.Version,
-		Dist: struct {
-			Type      string `json:"type"`
-			Url       string `json:"url"`
-			Reference string `json:"reference"`
-		}{
-			Type:      "tgz",
+		Dist: &JsonDist{
+			Type:      util.NpmPkgType,
 			Url:       npm.Dist.Url,
-			Reference: "",
+			Reference: npm.GitHead,
 		},
-		Source: struct {
-			Type      string `json:"type"`
-			Url       string `json:"url"`
-			Reference string `json:"reference"`
-		}{
+		Source: &JsonSource{
 			Type:      npm.Source.Type,
-			Url:       npm.Source.Url,
-			Reference: "",
+			Url:       strings.Replace(npm.Source.Url, "git+http", "http", 1),
+			Reference: npm.GitHead,
 		},
 		Type:         "",
 		AutoLoad:     nil,

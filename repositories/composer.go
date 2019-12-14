@@ -3,8 +3,8 @@ package repositories
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Masterminds/semver"
 	"go-composer/cache"
+	"go-composer/semver"
 	"net/url"
 	"sort"
 	"strings"

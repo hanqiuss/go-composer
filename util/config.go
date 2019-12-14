@@ -13,6 +13,8 @@ type Config struct {
 	Dev       bool
 }
 
+const NpmPkgType = "tar"
+
 var Conf Config
 
 func init() {

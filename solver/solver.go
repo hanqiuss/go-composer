@@ -3,16 +3,14 @@ package solver
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"github.com/Masterminds/semver"
 	"go-composer/cache"
 	"go-composer/repositories"
+	"go-composer/semver"
 	"go-composer/template"
 	"go-composer/util"
 	"io/ioutil"
 	"math"
-	"os"
 	"runtime"
 	"sort"
 	"time"
@@ -22,9 +20,9 @@ func Solver(p *repositories.JsonPackage) {
 	if p.Require == nil {
 		p.Require = make(map[string]string)
 	}
-	/*	for name, v := range p.RequireDev {
+	for name, v := range p.RequireDev {
 		p.Require[name] = v
-	}*/
+	}
 	rootVersion, err := semver.NewVersion(p.Version)
 	if err != nil {
 		rootVersion = nil
@@ -47,10 +45,8 @@ func Solver(p *repositories.JsonPackage) {
 		installList = getInstallList("root")
 		setDep()
 	}
-	fmt.Println("end solve sat", time.Now())
 	install()
-	//autoLoad()
-	fmt.Println("11111")
+	fmt.Println("end install sat", time.Now())
 }
 
 var sel = make(map[string]int)
@@ -69,6 +65,7 @@ func setDep() {
 			if !ok {
 				continue
 			}
+			ver = util.ReWriteConstraint(ver)
 			_, err := semver.NewConstraint(ver)
 			if err != nil {
 				fmt.Println("error constraints", depName, ver)
@@ -108,7 +105,7 @@ func solveDepByName(name string) bool {
 			if !ok {
 				continue
 			}
-			str = util.ReWriteVersion(str)
+			str = util.ReWriteConstraint(str)
 			curCts, err := semver.NewConstraint(str)
 			if err != nil {
 				sel[depByName]++
@@ -167,17 +164,20 @@ func getCheckVersionIndex(cts *semver.Constraints, p repositories.Packages) int 
 	return i
 }
 func checkDep() bool {
-	for name, project := range dependList {
+	for name := range installList {
 		if name == "root" {
 			continue
 		}
+		if sel[name] >= len(dependList[name].Packages) {
+			return false
+		}
 		ver := dependList[name].Packages[sel[name]].Version
-		for depByName := range project.Constraints {
+		for depByName := range dependList[name].Constraints {
 			str, ok := dependList[depByName].Packages[sel[depByName]].Package.Require[name]
 			if !ok {
 				continue
 			}
-			str = util.ReWriteVersion(str)
+			str = util.ReWriteConstraint(str)
 			ct, err := semver.NewConstraint(str)
 			if err != nil {
 				fmt.Println("check error : error constraints", str)
@@ -221,11 +221,11 @@ func install() {
 		go installWorker(pkgCh, resultCh)
 	}
 	for _, v := range installList {
-		if v.Dist.Type != "zip" && v.Dist.Type != "tgz" {
+		if v.Dist.Type != "zip" && v.Dist.Type != util.NpmPkgType {
 			fmt.Println("dist type error", v)
 		} else {
 			count++
-			lock.Packages = append(lock.Packages, *v)
+			lock.Packages = append(lock.Packages, v)
 			go func(v *repositories.JsonPackage) { pkgCh <- v }(v)
 		}
 	}
@@ -233,22 +233,27 @@ func install() {
 	cData, _ := ioutil.ReadFile("composer.json")
 	h := md5.Sum(cData)
 	lock.Hash = hex.EncodeToString(h[:])
-	lockData, err := json.Marshal(lock)
-	if err != nil {
-		fmt.Println("json encode error ", err)
-		return
-	}
-	err = ioutil.WriteFile("composer.lock", lockData, os.ModePerm)
-	if err != nil {
-		fmt.Println("write lock file error ", err)
-	}
+
 	for count > 0 {
 		count--
 		<-resultCh
 	}
 	close(pkgCh)
 	close(resultCh)
-	template.Generated(installList)
+
+	lock.Sort()
+	err := util.JsonDataToFile("composer.lock", lock)
+	if err != nil {
+		fmt.Println("write lock file error ", err)
+	}
+	err = template.Generated(installList)
+	if err != nil {
+		fmt.Println(err)
+	}
+	err = util.JsonDataToFile("vendor/composer/installed.json", lock.Packages)
+	if err != nil {
+		fmt.Println("write installed.json file error ", err)
+	}
 }
 func installWorker(fileCh <-chan *repositories.JsonPackage, result chan<- int) {
 	cacheObj := cache.NewCacheBase()
@@ -262,7 +267,7 @@ func installWorker(fileCh <-chan *repositories.JsonPackage, result chan<- int) {
 		if err != nil {
 			fmt.Println(err)
 		}
-		fmt.Printf("install %s version %s time: %s\r\n", p.Name, p.Version, time.Now().Sub(t1))
+		fmt.Printf("  - install %s version %s time: %s\r\n", p.Name, p.Version, time.Now().Sub(t1))
 		result <- 1
 	}
 }
@@ -286,6 +291,9 @@ func getSort(dep map[string]*repositories.Project) depSs {
 		count := 0
 		for range project.Constraints {
 			count++
+		}
+		if count == 0 {
+			continue
 		}
 		depSort = append(depSort, &depS{
 			name:  name,

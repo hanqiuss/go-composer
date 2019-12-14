@@ -2,7 +2,7 @@ package repositories
 
 import (
 	"fmt"
-	"github.com/Masterminds/semver"
+	"go-composer/semver"
 	"go-composer/util"
 	"regexp"
 	"strings"
@@ -11,6 +11,10 @@ import (
 
 var depend = make(map[string]*Project)
 var repoList map[string]Repository
+var blackList = map[string]bool{
+	"facebook/php-webdriver": true,
+}
+var dependLock sync.Mutex
 
 func GetDep(jsonPackage *JsonPackage) map[string]*Project {
 	if repoList == nil {
@@ -19,8 +23,8 @@ func GetDep(jsonPackage *JsonPackage) map[string]*Project {
 	ch := make(chan int)
 	count := 0
 	for name, ver := range jsonPackage.Require {
-		ver = util.ReWriteVersion(ver)
-		jsonPackage.Require[name] = ver
+		ver = util.ReWriteConstraint(ver)
+		//jsonPackage.Require[name] = ver
 		if !FilterRequire(&name, &ver) {
 			continue
 		}
@@ -34,7 +38,9 @@ func GetDep(jsonPackage *JsonPackage) map[string]*Project {
 					ret := repo.GetPackages(name)
 					if ret != nil {
 						metaDataReadyList.Store(name, true)
+						dependLock.Lock()
 						depend[name] = ret
+						dependLock.Unlock()
 						for _, v := range ret.Packages {
 							GetDep(v.Package)
 						}
@@ -88,6 +94,9 @@ func FilterRequire(name, ver *string) bool {
 	_, err := semver.NewConstraint(*ver)
 	if err != nil {
 		//fmt.Printf("require version%s %s error : %s\r\n",*name, *ver, err)
+		return false
+	}
+	if _, ok = blackList[*name]; ok {
 		return false
 	}
 	_, ok = metaDataGettingList.LoadOrStore(*name, true)

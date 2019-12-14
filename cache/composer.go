@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 )
@@ -63,22 +62,7 @@ func NewCacheBase() *Base {
 	}
 	return &ComposerCache
 }
-func (c *Base) GetManifestWithHash(name, urlStr, hash string) (r []byte) {
-	urlObj, err := url.Parse(urlStr)
-	if err != nil {
-		fmt.Println("cache : urlStr error ", err)
-		return
-	}
-	name = c.manifestPre + strings.ReplaceAll(name, "/", "$") + ".json"
 
-	file := filepath.Join(c.GetRepoDir(urlObj.Host), name)
-	r, err = util.DownloadAndSaveWithHash(urlStr, file, hash)
-	if err != nil {
-		fmt.Println("cache : get manifest error : ", err)
-		return
-	}
-	return r
-}
 func (c *Base) GetManifest(name, urlStr string) (r []byte) {
 	urlObj, err := url.Parse(urlStr)
 	if err != nil {
@@ -88,7 +72,7 @@ func (c *Base) GetManifest(name, urlStr string) (r []byte) {
 	name = c.manifestPre + strings.ReplaceAll(name, "/", "$") + ".json"
 
 	file := filepath.Join(c.GetRepoDir(urlObj.Host), name)
-	r, err = util.DownloadAndSave(urlStr, file)
+	r, err = util.DownloadAndSave(urlStr, file, true)
 	if err != nil {
 		fmt.Println("cache : get manifest error : ", err)
 		return
@@ -99,24 +83,6 @@ func (c *Base) GetRepoDir(host string) string {
 	return filepath.Join(c.repoDir, "https---"+host)
 }
 
-func (c *Base) CacheFiles(name, url, typ string) bool {
-	file := c.getFilePath(name, url, typ)
-	hash := path.Base(url)
-	_, err := util.DownloadAndSaveWithHash(url, file, hash)
-	return err == nil
-}
-func (c *Base) GetFiles(name, url, typ string) []byte {
-	file := c.getFilePath(name, url, typ)
-	_, err := os.Stat(file)
-	if err != nil {
-		c.CacheFiles(name, url, typ)
-	}
-	data, err := ioutil.ReadFile(file)
-	if err != nil {
-		return []byte{}
-	}
-	return data
-}
 func (c *Base) getFilePath(name, url, typ string) string {
 	dir := filepath.Join(c.filesDir, name)
 	err := os.MkdirAll(dir, os.ModePerm)
@@ -136,8 +102,7 @@ func (c *Base) Install(name, url, typ string) error {
 		return fmt.Errorf("install name empty, url : %s type : %s", url, typ)
 	}
 	file := c.getFilePath(name, url, typ)
-	hash := path.Base(url)
-	_, err := util.DownloadAndSaveWithHash(url, file, hash)
+	_, err := util.DownloadExist(url, file, false)
 	p, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("get cwd error %s", err)
@@ -146,7 +111,7 @@ func (c *Base) Install(name, url, typ string) error {
 	switch typ {
 	case "zip":
 		return Unzip(p, file)
-	case "tgz":
+	case util.NpmPkgType:
 		return UnTgz(p, file)
 	}
 	return Unzip(p, file)

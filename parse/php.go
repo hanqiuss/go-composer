@@ -26,9 +26,10 @@ type Dir struct {
 	Exclude []string
 }
 
-var classMap = make(map[string]string)
+var classMap = make(map[string]string, 8192)
 
 func Parse(dirs []Dir) map[string]string {
+	fmt.Println("parse dir num", len(dirs))
 	numCpu := runtime.NumCPU()
 	fileCh := make(chan *file, numCpu)
 	resultCh := make(chan parser.Parser, numCpu)
@@ -56,7 +57,6 @@ func processPath(pathList []Dir, fileCh chan<- *file) {
 				for _, exclude := range path.Exclude {
 					exclude = strings.ReplaceAll(exclude, "**", "")
 					if fPath == filepath.Join(path.Path, exclude) {
-						fmt.Println(fPath, filepath.Join(path.Path, path.Exclude[0]))
 						return filepath.SkipDir
 					}
 				}
@@ -75,17 +75,13 @@ func processPath(pathList []Dir, fileCh chan<- *file) {
 
 func parserWorker(fileCh <-chan *file, result chan<- parser.Parser) {
 	var parserWorker parser.Parser
-
 	for {
 		f, ok := <-fileCh
 		if !ok {
 			return
 		}
-
 		src := bytes.NewReader(f.content)
-
 		parserWorker = php7.NewParser(src, f.path)
-
 		parserWorker.Parse()
 
 		result <- parserWorker
@@ -108,15 +104,19 @@ func printerWorker(result <-chan parser.Parser) {
 			}
 			return
 		}
-
+		if parserWorker.GetRootNode() == nil {
+			wg.Done()
+			continue
+		}
 		path := parserWorker.GetPath()
 		path = strings.Replace(path, wd, "", 1)
 		path = strings.ReplaceAll(path, "\\", "/")
 		var cm = &ClassMap{make([]string, 0), ""}
 		parserWorker.GetRootNode().Walk(cm)
+		s := strings.SplitN(strings.TrimLeft(path, "/"), "/", 2)
 		if len(cm.Map) > 0 {
 			for _, v := range cm.Map {
-				classMap[v] = path
+				classMap[v] = s[1]
 			}
 		}
 		wg.Done()

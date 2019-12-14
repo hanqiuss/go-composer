@@ -1,8 +1,10 @@
 package util
 
 import (
-	"crypto/sha256"
+	"bytes"
+	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -11,12 +13,18 @@ import (
 	"strings"
 )
 
-func DownloadAndSaveWithHash(url, file, hash string) (body []byte, err error) {
-	data, err := ioutil.ReadFile(file)
-	if len(data) > 0 {
-		h := sha256.Sum256(data)
-		if hash == hex.EncodeToString(h[:]) {
-			return data, nil
+func DownloadAndSave(url, file string, needReturn bool) (body []byte, err error) {
+	fInfo, err := os.Stat(file)
+	if err == nil {
+		resp, err := http.Head(url)
+		if err == nil && resp.StatusCode == 200 {
+			d, err := http.ParseTime(resp.Header.Get("Date"))
+			if err == nil && !d.After(fInfo.ModTime()) {
+				if needReturn {
+					return ioutil.ReadFile(file)
+				}
+				return body, nil
+			}
 		}
 	}
 	res, err := http.Get(url)
@@ -34,19 +42,15 @@ func DownloadAndSaveWithHash(url, file, hash string) (body []byte, err error) {
 	}
 	return
 }
-func DownloadAndSave(url, file string) (body []byte, err error) {
-	fInfo, err := os.Stat(file)
+func DownloadExist(url, file string, needReturn bool) (body []byte, err error) {
+	_, err = os.Stat(file)
 	if err == nil {
-		resp, err := http.Head(url)
-		if err == nil && resp.StatusCode == 200 {
-			d, err := http.ParseTime(resp.Header.Get("Date"))
-			if err == nil && !d.After(fInfo.ModTime()) {
-				return ioutil.ReadFile(file)
-			} else {
-				fmt.Println("util : date expire ", fInfo.ModTime(), d)
-			}
+		if needReturn {
+			return ioutil.ReadFile(file)
 		}
+		return body, nil
 	}
+	//fmt.Println("get url", url)
 	res, err := http.Get(url)
 	if err != nil || res.StatusCode != 200 {
 		return body, fmt.Errorf("get url error %s %s", url, err)
@@ -68,11 +72,28 @@ func Close(i io.Closer) {
 	}
 }
 
-/*func MD5ToString(b []byte) string {
+func MD5ToString(b []byte) string {
 	h := md5.Sum(b)
 	return hex.EncodeToString(h[:])
-}*/
-func ReWriteVersion(v string) string {
+}
+func ReWriteConstraint(v string) string {
 	v = strings.ReplaceAll(strings.ReplaceAll(v, "||", "|"), "|", "||")
 	return strings.ReplaceAll(v, "@", "-")
+}
+
+func JsonDataToFile(filepath string, data interface{}) error {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("json encode error %s", err)
+	}
+	var buf bytes.Buffer
+	err = json.Indent(&buf, b, "", "    ")
+	if err != nil {
+		return fmt.Errorf("json Indent error %s", err)
+	}
+	err = ioutil.WriteFile(filepath, buf.Bytes(), os.ModePerm)
+	if err != nil {
+		return err
+	}
+	return nil
 }
