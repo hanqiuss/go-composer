@@ -20,11 +20,11 @@ func Solver(p *repositories.JsonPackage) {
 	if p.Require == nil {
 		p.Require = make(map[string]string)
 	}
-	//if util.Conf.Dev{
-	for name, v := range p.RequireDev {
-		p.Require[name] = v
+	if util.Conf.Dev {
+		for name, v := range p.RequireDev {
+			p.Require[name] = v
+		}
 	}
-	//}
 	rootVersion, err := semver.NewVersion(p.Version)
 	if err != nil {
 		rootVersion = nil
