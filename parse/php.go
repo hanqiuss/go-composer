@@ -3,9 +3,9 @@ package parse
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"github.com/z7zmey/php-parser/parser"
 	"github.com/z7zmey/php-parser/php7"
+	"go-composer/util"
 	"io/ioutil"
 	"log"
 	"os"
@@ -29,7 +29,6 @@ type Dir struct {
 var classMap = make(map[string]string, 8192)
 
 func Parse(dirs []Dir) map[string]string {
-	fmt.Println("parse dir num", len(dirs))
 	numCpu := runtime.NumCPU()
 	fileCh := make(chan *file, numCpu)
 	resultCh := make(chan parser.Parser, numCpu)
@@ -91,11 +90,8 @@ func parserWorker(fileCh <-chan *file, result chan<- parser.Parser) {
 func printerWorker(result <-chan parser.Parser) {
 
 	w := bufio.NewWriter(os.Stdout)
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Println("php.go get cwd error", err)
-	}
-	wd = filepath.Join(wd, "vendor")
+
+	wd := util.Conf.VendorDir
 	for {
 		parserWorker, ok := <-result
 		if !ok {

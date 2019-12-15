@@ -33,8 +33,8 @@ type JsonPackage struct {
 	RequireDev   map[string]string      `json:"require-dev"`
 	Type         string                 `json:"type"`
 	Extra        interface{}            `json:"extra"`
-	License      interface{}            `json:"license"`
 	AutoLoad     map[string]interface{} `json:"autoload"`
+	License      interface{}            `json:"license"`
 	Description  string                 `json:"description"`
 	Repositories JsonRepositories       `json:"repositories"`
 }
@@ -50,6 +50,7 @@ type JsonLock struct {
 
 func (l *JsonLock) Sort() {
 	sort.Sort(l.Packages)
+	sort.Sort(l.PackagesDev)
 }
 
 type JsonRepository struct {
@@ -65,6 +66,7 @@ type Package struct {
 type Project struct {
 	Constraints map[string]bool
 	Packages    Packages
+	IsDev       bool
 }
 
 type JsonNpmPackage struct {

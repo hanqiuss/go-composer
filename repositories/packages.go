@@ -15,8 +15,13 @@ var blackList = map[string]bool{
 	"facebook/php-webdriver": true,
 }
 var dependLock sync.Mutex
+var depMap sync.Map
 
 func GetDep(jsonPackage *JsonPackage) map[string]*Project {
+	_, ok := depMap.LoadOrStore(jsonPackage.Name, true)
+	if ok {
+		return nil
+	}
 	if repoList == nil {
 		repoList = CreateManager(jsonPackage)
 	}
@@ -60,6 +65,7 @@ func GetDep(jsonPackage *JsonPackage) map[string]*Project {
 		count--
 		<-ch
 	}
+	fmt.Println(jsonPackage.Name)
 	return depend
 }
 

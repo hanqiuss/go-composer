@@ -32,8 +32,7 @@ func NewCacheBase() *Base {
 	cacheDir, _ := os.UserCacheDir()
 	if cacheDir == "" {
 		fmt.Println("can't get home path, will use cwd path ")
-		getCwd, _ := os.Getwd()
-		cacheDir = filepath.Join(getCwd, "cache$$")
+		cacheDir = filepath.Join(util.Conf.Cwd, "cache$$")
 	}
 	cacheDir = filepath.Join(cacheDir, "Composer")
 	repoDir := filepath.Join(cacheDir, "repo")
@@ -103,11 +102,10 @@ func (c *Base) Install(name, url, typ string) error {
 	}
 	file := c.getFilePath(name, url, typ)
 	_, err := util.DownloadExist(url, file, false)
-	p, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("get cwd error %s", err)
+		return fmt.Errorf("download error %s", err)
 	}
-	p = filepath.Join(p, "/vendor/"+name)
+	p := filepath.Join(util.Conf.VendorDir, name)
 	switch typ {
 	case "zip":
 		return Unzip(p, file)

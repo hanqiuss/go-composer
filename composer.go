@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go-composer/repositories"
 	"go-composer/solver"
+	"go-composer/util"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -15,12 +16,9 @@ func main() {
 	time1 := time.Now()
 	/*	parse.Parse()
 		return*/
-	fmt.Println("start program in ", time.Now())
-	var file, err = os.Getwd()
-	if err != nil {
-		os.Exit(-1)
-	}
-	file = filepath.Join(file, "composer.json")
+	fmt.Println("start at ", time.Now())
+
+	file := filepath.Join(util.Conf.Cwd, "composer.json")
 	p := ReadPackage(file)
 	if p == nil {
 		fmt.Println("read composer.json error")

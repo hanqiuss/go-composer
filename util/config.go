@@ -1,6 +1,7 @@
 package util
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,22 +19,26 @@ const NpmPkgType = "tar"
 var Conf Config
 
 func init() {
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Println("can't get work dir")
+	var cwd string
+	flag.StringVar(&cwd, "d", "", "work dir")
+	var pro = flag.Bool("pro", false, "install pro packages")
+
+	flag.Parse()
+	if cwd != "" {
+		Conf.Cwd = cwd
+	} else {
+		wd, err := os.Getwd()
+		if err != nil {
+			fmt.Println("can't get work dir")
+		}
+		Conf.Cwd = wd
 	}
-	Conf.Cwd = wd
 	Conf.VendorDir = filepath.Join(Conf.Cwd, "vendor")
 	cacheDir, _ := os.UserCacheDir()
 	if cacheDir == "" {
-		fmt.Println("can't get home path, will use cwd path ")
-		getCwd, _ := os.Getwd()
-		cacheDir = filepath.Join(getCwd, "cache$$")
+		fmt.Println("can't get home path, will use work dir path ")
+		cacheDir = filepath.Join(Conf.Cwd, "cache$$")
 	}
-	Conf.CacheDir = funcName(cacheDir)
-	Conf.Dev = true
-}
-
-func funcName(cacheDir string) string {
-	return cacheDir
+	Conf.CacheDir = cacheDir
+	Conf.Dev = !*pro
 }

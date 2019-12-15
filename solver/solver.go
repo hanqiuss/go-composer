@@ -20,9 +20,11 @@ func Solver(p *repositories.JsonPackage) {
 	if p.Require == nil {
 		p.Require = make(map[string]string)
 	}
+	//if util.Conf.Dev{
 	for name, v := range p.RequireDev {
 		p.Require[name] = v
 	}
+	//}
 	rootVersion, err := semver.NewVersion(p.Version)
 	if err != nil {
 		rootVersion = nil
@@ -210,6 +212,7 @@ func getInstallList(root string) (list map[string]*repositories.JsonPackage) {
 	return list
 }
 func install() {
+	markDev()
 	count := 0
 	lock := repositories.JsonLock{}
 	delete(installList, "root")
@@ -220,12 +223,16 @@ func install() {
 	for i := 0; i < numCpu; i++ {
 		go installWorker(pkgCh, resultCh)
 	}
-	for _, v := range installList {
+	for k, v := range installList {
 		if v.Dist.Type != "zip" && v.Dist.Type != util.NpmPkgType {
 			fmt.Println("dist type error", v)
 		} else {
 			count++
-			lock.Packages = append(lock.Packages, v)
+			if dependList[k].IsDev {
+				lock.PackagesDev = append(lock.PackagesDev, v)
+			} else {
+				lock.Packages = append(lock.Packages, v)
+			}
 			go func(v *repositories.JsonPackage) { pkgCh <- v }(v)
 		}
 	}
@@ -240,19 +247,47 @@ func install() {
 	}
 	close(pkgCh)
 	close(resultCh)
-
+	installEnd(lock)
+}
+func installEnd(lock repositories.JsonLock) {
 	lock.Sort()
 	err := util.JsonDataToFile("composer.lock", lock)
 	if err != nil {
 		fmt.Println("write lock file error ", err)
 	}
+	lock.Packages = append(lock.Packages, lock.PackagesDev...)
+	lock.Sort()
+	err = util.JsonDataToFile("vendor/composer/installed.json", lock.Packages)
+	if err != nil {
+		fmt.Println("write installed.json file error ", err)
+	}
 	err = template.Generated(installList)
 	if err != nil {
 		fmt.Println(err)
 	}
-	err = util.JsonDataToFile("vendor/composer/installed.json", lock.Packages)
-	if err != nil {
-		fmt.Println("write installed.json file error ", err)
+}
+func markDev() {
+	if !util.Conf.Dev {
+		return
+	}
+	root := dependList["root"].Packages[0].Package
+	for k := range root.RequireDev {
+		_markDev(k, true)
+	}
+	for k := range root.Require {
+		_, ok := root.RequireDev[k]
+		if !ok {
+			_markDev(k, false)
+		}
+	}
+}
+func _markDev(name string, dev bool) {
+	if _, ok := dependList[name]; !ok {
+		return
+	}
+	dependList[name].IsDev = dev
+	for k := range dependList[name].Packages[sel[name]].Package.Require {
+		_markDev(k, dev)
 	}
 }
 func installWorker(fileCh <-chan *repositories.JsonPackage, result chan<- int) {
