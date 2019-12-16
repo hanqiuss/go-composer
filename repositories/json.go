@@ -57,7 +57,7 @@ type JsonRepository struct {
 	Type string `json:"type"`
 	Url  string `json:"url"`
 }
-type JsonRepositories []JsonRepository
+type JsonRepositories interface{}
 type Package struct {
 	Version *semver.Version
 	Package *JsonPackage

@@ -65,7 +65,6 @@ func GetDep(jsonPackage *JsonPackage) map[string]*Project {
 		count--
 		<-ch
 	}
-	fmt.Println(jsonPackage.Name)
 	return depend
 }
 

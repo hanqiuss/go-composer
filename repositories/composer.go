@@ -69,6 +69,13 @@ func (c *Composer) getRepoUrl(name string) string {
 func getPackages(packages *JsonVersionPackages) Packages {
 	ret := Packages{}
 	for v, p := range *packages {
+		s := strings.Split(v, ".")
+		if len(s) > 3 {
+			v = strings.Join(s[:3], ".")
+		}
+		if strings.Contains(v, "dev") {
+			v = v + ""
+		}
 		version, err := semver.NewVersion(v)
 		if err != nil || version == nil {
 			continue

@@ -41,6 +41,7 @@ var (
 const semVerRegex string = `v?([0-9]+)(\.[0-9]+)?(\.[0-9]+)?` +
 	`(-([0-9A-Za-z\-]+(\.[0-9A-Za-z\-]+)*))?` +
 	`(\+([0-9A-Za-z\-]+(\.[0-9A-Za-z\-]+)*))?`
+const modifierRegex string = `[._-]?(?:(stable|beta|b|RC|alpha|a|patch|pl|p)((?:[.-]?\d+)*+)?)?([.-]?dev)?`
 
 // Version represents a single semantic version.
 type Version struct {
@@ -48,6 +49,7 @@ type Version struct {
 	pre                 string
 	metadata            string
 	original            string
+	stabilities         string
 }
 
 func init() {

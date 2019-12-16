@@ -111,14 +111,15 @@ func solveDepByName(name string) bool {
 			curCts, err := semver.NewConstraint(str)
 			if err != nil {
 				sel[depByName]++
-				fmt.Println("error constraints ", str)
+				fmt.Println("error constraints ", str, depByName)
 				goto begin
 			}
 			ps := dependList[name].Packages
 			index := getCheckVersionIndex(curCts, ps)
 			if index == len(dependList[name].Packages) {
-				fmt.Printf("package %s need %s %s, no match", depByName, name, str)
-				return false
+				fmt.Printf("package %s need %s %s, no match\r\n", depByName, name, str)
+				sel[depByName]++
+				goto begin
 			}
 			ctsList = append(ctsList, curCts)
 			if min > index {
@@ -194,7 +195,9 @@ func checkDep() bool {
 	return true
 }
 func getInstallList(root string) (list map[string]*repositories.JsonPackage) {
-	list = make(map[string]*repositories.JsonPackage)
+	if root == "root" {
+		installList = make(map[string]*repositories.JsonPackage)
+	}
 	project, ok := dependList[root]
 	if !ok {
 		return
@@ -204,12 +207,13 @@ func getInstallList(root string) (list map[string]*repositories.JsonPackage) {
 		if !ok {
 			continue
 		}
-		list[name] = p.Packages[sel[name]].Package
-		for k, v := range getInstallList(name) {
-			list[k] = v
+		if _, ok := installList[name]; ok {
+			continue
 		}
+		installList[name] = p.Packages[sel[name]].Package
+		getInstallList(name)
 	}
-	return list
+	return installList
 }
 func install() {
 	markDev()

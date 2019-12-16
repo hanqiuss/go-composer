@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -81,7 +82,7 @@ func ReWriteConstraint(v string) string {
 	return strings.ReplaceAll(v, "@", "-")
 }
 
-func JsonDataToFile(filepath string, data interface{}) error {
+func JsonDataToFile(f string, data interface{}) error {
 	b, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("json encode error %s", err)
@@ -91,7 +92,8 @@ func JsonDataToFile(filepath string, data interface{}) error {
 	if err != nil {
 		return fmt.Errorf("json Indent error %s", err)
 	}
-	err = ioutil.WriteFile(filepath, buf.Bytes(), os.ModePerm)
+	_ = os.MkdirAll(filepath.Dir(f), os.ModePerm)
+	err = ioutil.WriteFile(f, buf.Bytes(), os.ModePerm)
 	if err != nil {
 		return err
 	}
