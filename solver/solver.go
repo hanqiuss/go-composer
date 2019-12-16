@@ -266,6 +266,10 @@ func installEnd(lock repositories.JsonLock) {
 		fmt.Println(err)
 	}
 }
+
+var markDevMap = make(map[string]bool)
+var markProMap = make(map[string]bool)
+
 func markDev() {
 	if !util.Conf.Dev {
 		return
@@ -285,7 +289,18 @@ func _markDev(name string, dev bool) {
 	if _, ok := dependList[name]; !ok {
 		return
 	}
+	var mmap map[string]bool
+	if dev {
+		mmap = markDevMap
+	} else {
+		mmap = markProMap
+	}
+	_, ok := mmap[name]
+	if ok {
+		return
+	}
 	dependList[name].IsDev = dev
+	mmap[name] = true
 	for k := range dependList[name].Packages[sel[name]].Package.Require {
 		_markDev(k, dev)
 	}
