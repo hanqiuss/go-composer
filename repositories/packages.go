@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"go-composer/semver"
 	"go-composer/util"
-	"regexp"
-	"strings"
 	"sync"
 )
 
@@ -46,9 +44,16 @@ func GetDep(jsonPackage *JsonPackage) map[string]*Project {
 						dependLock.Lock()
 						depend[name] = ret
 						dependLock.Unlock()
-						for _, v := range ret.Packages {
-							GetDep(v.Package)
+						p := JsonPackage{
+							Name:    name,
+							Require: make(map[string]string),
 						}
+						for _, v := range ret.Packages {
+							for kk, vv := range v.Package.Require {
+								p.Require[kk] = vv
+							}
+						}
+						GetDep(&p)
 					} else {
 						failedList.Store(name, true)
 						fmt.Println("get package failed", name, repo)
@@ -85,15 +90,7 @@ func FilterRequire(name, ver *string) bool {
 	if ok {
 		return false
 	}
-	ok, _ = regexp.MatchString("^php$", *name)
-	if ok {
-		return false
-	}
-	ok, _ = regexp.MatchString("^(ext|lib)-.*", *name)
-	if ok {
-		return false
-	}
-	if !strings.Contains(*name, "/") {
+	if !util.FilterRequire(*name) {
 		return false
 	}
 	_, err := semver.NewConstraint(*ver)

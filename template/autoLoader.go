@@ -558,7 +558,18 @@ func Generated(l map[string]*repositories.JsonPackage) error {
 		for k, v := range pkg.AutoLoad {
 			switch k {
 			case "classmap":
-				for _, vv := range v.([]interface{}) {
+				vl := make([]interface{}, 0)
+				switch v.(type) {
+				case map[string]interface{}:
+					for _, vv := range v.(map[string]interface{}) {
+						vl = append(vl, vv)
+					}
+				case string:
+					vl = append(vl, v)
+				case []interface{}:
+					vl = v.([]interface{})
+				}
+				for _, vv := range vl {
 					switch vv.(type) {
 					case []interface{}:
 						fmt.Println("autoload : error type")

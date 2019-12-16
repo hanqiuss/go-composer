@@ -69,6 +69,13 @@ type Project struct {
 	IsDev       bool
 }
 
+func (p *Project) GetPackages(index int) *Package {
+	return p.Packages[index]
+}
+func (p *Project) GetRequire(index int) map[string]string {
+	return p.Packages[index].Package.Require
+}
+
 type JsonNpmPackage struct {
 	Name        string            `json:"name"`
 	Description string            `json:"description"`

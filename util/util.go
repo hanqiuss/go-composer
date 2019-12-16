@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
 )
 
 func DownloadAndSave(url, file string, needReturn bool) (body []byte, err error) {
@@ -20,7 +22,7 @@ func DownloadAndSave(url, file string, needReturn bool) (body []byte, err error)
 		resp, err := http.Head(url)
 		if err == nil && resp.StatusCode == 200 {
 			d, err := http.ParseTime(resp.Header.Get("Date"))
-			if err == nil && !d.After(fInfo.ModTime()) {
+			if err == nil && !d.After(fInfo.ModTime().Add(time.Hour*2)) {
 				if needReturn {
 					return ioutil.ReadFile(file)
 				}
@@ -80,6 +82,20 @@ func MD5ToString(b []byte) string {
 func ReWriteConstraint(v string) string {
 	v = strings.ReplaceAll(strings.ReplaceAll(v, "||", "|"), "|", "||")
 	return strings.ReplaceAll(v, "@", "-")
+}
+func FilterRequire(name string) bool {
+	ok, _ := regexp.MatchString("^php$", name)
+	if ok {
+		return false
+	}
+	ok, _ = regexp.MatchString("^(ext|lib)-.*", name)
+	if ok {
+		return false
+	}
+	if !strings.Contains(name, "/") {
+		return false
+	}
+	return true
 }
 
 func JsonDataToFile(f string, data interface{}) error {

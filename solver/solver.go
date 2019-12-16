@@ -37,15 +37,11 @@ func Solver(p *repositories.JsonPackage) {
 	dependList = dep
 	fmt.Println("start solve sat", time.Now())
 
-	installList = getInstallList("root")
-	setDep()
 	for !checkDep() {
 		if !solveDep() {
 			fmt.Println("solver error")
 			return
 		}
-		installList = getInstallList("root")
-		setDep()
 	}
 	install()
 	fmt.Println("end install sat", time.Now())
@@ -55,28 +51,6 @@ var sel = make(map[string]int)
 var dependList map[string]*repositories.Project
 var installList map[string]*repositories.JsonPackage
 
-/* set dependence link */
-func setDep() {
-	for _, p := range dependList {
-		p.Constraints = make(map[string]bool)
-	}
-	installList["root"] = dependList["root"].Packages[0].Package
-	for root, p := range installList {
-		for depName, ver := range p.Require {
-			_, ok := dependList[depName]
-			if !ok {
-				continue
-			}
-			ver = util.ReWriteConstraint(ver)
-			_, err := semver.NewConstraint(ver)
-			if err != nil {
-				fmt.Println("error constraints", depName, ver)
-				continue
-			}
-			dependList[depName].Constraints[root] = true
-		}
-	}
-}
 func solveDep() bool {
 	sortDep := getSort(dependList)
 	for _, count := range sortDep {
@@ -92,11 +66,12 @@ func solveDep() bool {
 	return true
 }
 func solveDepByName(name string) bool {
-	cts := dependList[name].Constraints
 	for {
 	begin:
-		min := math.MaxInt64
-		minName := ""
+		cts := dependList[name].Constraints
+		min := math.MaxInt32
+		min2 := math.MaxInt32
+		minName := make([]string, 0)
 		ctsList := make([]*semver.Constraints, 0)
 		// get the top index of  the match version
 		for depByName := range cts {
@@ -115,16 +90,19 @@ func solveDepByName(name string) bool {
 				goto begin
 			}
 			ps := dependList[name].Packages
-			index := getCheckVersionIndex(curCts, ps)
+			index := getCheckVersionIndex(curCts, ps, 0)
 			if index == len(dependList[name].Packages) {
 				fmt.Printf("package %s need %s %s, no match\r\n", depByName, name, str)
 				sel[depByName]++
 				goto begin
 			}
 			ctsList = append(ctsList, curCts)
+			if min == index {
+				minName = append(minName, depByName)
+			}
 			if min > index {
-				min = index
-				minName = depByName
+				min, min2 = index, min
+				minName = []string{depByName}
 			}
 		}
 		if len(ctsList) == 0 {
@@ -148,12 +126,51 @@ func solveDepByName(name string) bool {
 			min++
 		}
 		// downgrade the dependBy version which has the max require version(constraints)
-		sel[minName]++
+		_solveMultipleDown(minName, name, min2)
 	}
 }
-func getCheckVersionIndex(cts *semver.Constraints, p repositories.Packages) int {
+func _solveMultipleDown(l []string, name string, start int) {
+	if len(l) == 0 {
+		fmt.Println("_solveMultipleDown error list ", name)
+		return
+	}
+	if len(l) == 1 {
+		sel[l[0]]++
+		return
+	}
+	if start == math.MaxInt32 {
+		return
+	}
+	p := dependList[name].Packages
+	end := len(p)
+	for _, depByName := range l {
+		endDepBy := len(dependList[depByName].Packages)
+		startDepBy := 0
+		for startDepBy = sel[depByName]; startDepBy < endDepBy; startDepBy++ {
+			str := dependList[depByName].Packages[startDepBy].Package.Require[name]
+			str = util.ReWriteConstraint(str)
+			if str == "" || str == "*" {
+				sel[depByName] = startDepBy
+				break
+			}
+			curCts, err := semver.NewConstraint(str)
+			if err != nil {
+				continue
+			}
+			if i := getCheckVersionIndex(curCts, p, start); i < end {
+				sel[depByName] = startDepBy
+				break
+			}
+		}
+		if startDepBy >= endDepBy {
+			fmt.Println("_solveMultipleDown error no match ", depByName, name)
+			return
+		}
+	}
+}
+func getCheckVersionIndex(cts *semver.Constraints, p repositories.Packages, start int) int {
 	i := len(p)
-	for j := 0; j < i; j++ {
+	for j := start; j < i; j++ {
 		if p[j].Version == nil {
 			continue
 		}
@@ -161,12 +178,10 @@ func getCheckVersionIndex(cts *semver.Constraints, p repositories.Packages) int 
 			i = j
 		}
 	}
-	if i == len(p) {
-		fmt.Println("no useful version ", cts, p[0].Package.Name)
-	}
 	return i
 }
 func checkDep() bool {
+	updateInstallList("root")
 	for name := range installList {
 		if name == "root" {
 			continue
@@ -194,9 +209,12 @@ func checkDep() bool {
 	}
 	return true
 }
-func getInstallList(root string) (list map[string]*repositories.JsonPackage) {
+func updateInstallList(root string) (list map[string]*repositories.JsonPackage) {
 	if root == "root" {
 		installList = make(map[string]*repositories.JsonPackage)
+		for _, p := range dependList {
+			p.Constraints = make(map[string]bool)
+		}
 	}
 	project, ok := dependList[root]
 	if !ok {
@@ -210,8 +228,9 @@ func getInstallList(root string) (list map[string]*repositories.JsonPackage) {
 		if _, ok := installList[name]; ok {
 			continue
 		}
+		dependList[name].Constraints[root] = true
 		installList[name] = p.Packages[sel[name]].Package
-		getInstallList(name)
+		updateInstallList(name)
 	}
 	return installList
 }
@@ -271,17 +290,18 @@ func installEnd(lock repositories.JsonLock) {
 	}
 }
 
-var markDevMap = make(map[string]bool)
-var markProMap = make(map[string]bool)
+var markMap = make(map[string]bool)
 
 func markDev() {
 	if !util.Conf.Dev {
 		return
 	}
 	root := dependList["root"].Packages[0].Package
+	markMap = make(map[string]bool)
 	for k := range root.RequireDev {
 		_markDev(k, true)
 	}
+	markMap = make(map[string]bool)
 	for k := range root.Require {
 		_, ok := root.RequireDev[k]
 		if !ok {
@@ -293,18 +313,12 @@ func _markDev(name string, dev bool) {
 	if _, ok := dependList[name]; !ok {
 		return
 	}
-	var mmap map[string]bool
-	if dev {
-		mmap = markDevMap
-	} else {
-		mmap = markProMap
-	}
-	_, ok := mmap[name]
+	_, ok := markMap[name]
 	if ok {
 		return
 	}
 	dependList[name].IsDev = dev
-	mmap[name] = true
+	markMap[name] = true
 	for k := range dependList[name].Packages[sel[name]].Package.Require {
 		_markDev(k, dev)
 	}
