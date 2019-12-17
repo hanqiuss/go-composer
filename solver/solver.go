@@ -10,7 +10,6 @@ import (
 	"go-composer/template"
 	"go-composer/util"
 	"io/ioutil"
-	"math"
 	"runtime"
 	"sort"
 	"time"
@@ -48,7 +47,40 @@ func Solver(p *repositories.JsonPackage) {
 	fmt.Println("end install at", time.Now())
 }
 
-var sel = make(map[string]int)
+type selected map[string]int
+
+func (s selected) set(n string, i int) {
+	if i >= len(dependList[n].Packages) {
+		s[n] = len(dependList[n].Packages)
+	}
+	old := s[n]
+	r1 := dependList[n].GetRequire(old)
+	r2 := dependList[n].GetRequire(i)
+	update := false
+	for dep := range r1 { //dep in r1 but not in r2
+		if _, ok := r2[dep]; !ok {
+			if _, ok := dependList[dep]; ok {
+				update = true
+			}
+		}
+	}
+	for dep := range r2 { //dep in r2 but not in r1
+		if _, ok := r1[dep]; !ok {
+			if _, ok := dependList[dep]; ok {
+				update = true
+			}
+		}
+	}
+	if update {
+		updateInstallList("root")
+	}
+	s[n] = i
+}
+func (s selected) add(n string) {
+	s.set(n, s[n]+1)
+}
+
+var sel = selected{}
 var dependList map[string]*repositories.Project
 var installList map[string]*repositories.JsonPackage
 
@@ -67,7 +99,6 @@ func solveDep() bool {
 	return true
 }
 func solveDepByName(name string) bool {
-	defer updateInstallList("root")
 	for {
 	begin:
 		cts := dependList[name].Constraints
@@ -75,9 +106,6 @@ func solveDepByName(name string) bool {
 		max2 := 0
 		nameList := make([]string, 0)
 		ctsList := make([]*semver.Constraints, 0)
-		if name == "topthink/think-helper" {
-			fmt.Println(111)
-		}
 		// get the top index of  the match version
 		for depByName := range cts {
 			if sel[depByName] >= len(dependList[depByName].Packages) {
@@ -90,7 +118,7 @@ func solveDepByName(name string) bool {
 			str = util.ReWriteConstraint(str)
 			curCts, err := semver.NewConstraint(str)
 			if err != nil {
-				sel[depByName]++
+				sel.add(depByName)
 				fmt.Println("error constraints ", str, depByName)
 				goto begin
 			}
@@ -98,7 +126,7 @@ func solveDepByName(name string) bool {
 			index := getCheckVersionIndex(curCts, ps, 0)
 			if index == len(dependList[name].Packages) {
 				fmt.Printf("package %s need %s %s, no match\r\n", depByName, name, str)
-				sel[depByName]++
+				sel.add(depByName)
 				goto begin
 			}
 			ctsList = append(ctsList, curCts)
@@ -123,7 +151,7 @@ func solveDepByName(name string) bool {
 				}
 			}
 			if check {
-				sel[name] = max
+				sel.set(name, max)
 				return true
 			}
 			max++
@@ -132,17 +160,14 @@ func solveDepByName(name string) bool {
 		_solveMultipleDown(nameList, name, max2)
 	}
 }
-func _solveMultipleDown(l []string, name string, start int) {
+func _solveMultipleDown(l []string, name string, start int) bool {
 	if len(l) == 0 {
 		fmt.Println("_solveMultipleDown error list ", name)
-		return
+		return false
 	}
 	if len(l) == 1 {
-		sel[l[0]]++
-		return
-	}
-	if start == math.MaxInt32 {
-		return
+		sel.add(l[0])
+		return true
 	}
 	p := dependList[name].Packages
 	end := len(p)
@@ -153,7 +178,7 @@ func _solveMultipleDown(l []string, name string, start int) {
 			str := dependList[depByName].Packages[startDepBy].Package.Require[name]
 			str = util.ReWriteConstraint(str)
 			if str == "" || str == "*" {
-				sel[depByName] = startDepBy
+				sel.set(depByName, startDepBy)
 				break
 			}
 			curCts, err := semver.NewConstraint(str)
@@ -161,15 +186,16 @@ func _solveMultipleDown(l []string, name string, start int) {
 				continue
 			}
 			if i := getCheckVersionIndex(curCts, p, start); i < end {
-				sel[depByName] = startDepBy
+				sel.set(depByName, startDepBy)
 				break
 			}
 		}
 		if startDepBy >= endDepBy {
 			fmt.Println("_solveMultipleDown error no match ", depByName, name)
-			return
+			return false
 		}
 	}
+	return true
 }
 func getCheckVersionIndex(cts *semver.Constraints, p repositories.Packages, start int) int {
 	i := len(p)
@@ -213,9 +239,6 @@ func checkDep() bool {
 	return true
 }
 func updateInstallList(root string) (list map[string]*repositories.JsonPackage) {
-	if root == "phpunit/phpunit" || root == "sebastian/comparator" || root == "codeception/phpunit-wrapper" {
-		fmt.Println(111)
-	}
 	if root == "root" {
 		installList = make(map[string]*repositories.JsonPackage)
 		for _, p := range dependList {
