@@ -43,8 +43,9 @@ func Solver(p *repositories.JsonPackage) {
 			return
 		}
 	}
+	fmt.Println("end solver at", time.Now())
 	install()
-	fmt.Println("end install sat", time.Now())
+	fmt.Println("end install at", time.Now())
 }
 
 var sel = make(map[string]int)
@@ -66,13 +67,17 @@ func solveDep() bool {
 	return true
 }
 func solveDepByName(name string) bool {
+	defer updateInstallList("root")
 	for {
 	begin:
 		cts := dependList[name].Constraints
-		min := math.MaxInt32
-		min2 := math.MaxInt32
-		minName := make([]string, 0)
+		max := 0
+		max2 := 0
+		nameList := make([]string, 0)
 		ctsList := make([]*semver.Constraints, 0)
+		if name == "topthink/think-helper" {
+			fmt.Println(111)
+		}
 		// get the top index of  the match version
 		for depByName := range cts {
 			if sel[depByName] >= len(dependList[depByName].Packages) {
@@ -97,12 +102,9 @@ func solveDepByName(name string) bool {
 				goto begin
 			}
 			ctsList = append(ctsList, curCts)
-			if min == index {
-				minName = append(minName, depByName)
-			}
-			if min > index {
-				min, min2 = index, min
-				minName = []string{depByName}
+			nameList = append(nameList, depByName)
+			if max < index {
+				max = index
 			}
 		}
 		if len(ctsList) == 0 {
@@ -110,8 +112,9 @@ func solveDepByName(name string) bool {
 		}
 		n := len(dependList[name].Packages)
 		// check is some version match all constraints
-		for min < n {
-			p := dependList[name].Packages[min]
+		max2 = max
+		for max < n {
+			p := dependList[name].Packages[max]
 			check := true
 			for _, cts := range ctsList {
 				if !cts.Check(p.Version) {
@@ -120,13 +123,13 @@ func solveDepByName(name string) bool {
 				}
 			}
 			if check {
-				sel[name] = min
+				sel[name] = max
 				return true
 			}
-			min++
+			max++
 		}
 		// downgrade the dependBy version which has the max require version(constraints)
-		_solveMultipleDown(minName, name, min2)
+		_solveMultipleDown(nameList, name, max2)
 	}
 }
 func _solveMultipleDown(l []string, name string, start int) {
@@ -210,6 +213,9 @@ func checkDep() bool {
 	return true
 }
 func updateInstallList(root string) (list map[string]*repositories.JsonPackage) {
+	if root == "phpunit/phpunit" || root == "sebastian/comparator" || root == "codeception/phpunit-wrapper" {
+		fmt.Println(111)
+	}
 	if root == "root" {
 		installList = make(map[string]*repositories.JsonPackage)
 		for _, p := range dependList {
@@ -220,15 +226,15 @@ func updateInstallList(root string) (list map[string]*repositories.JsonPackage) 
 	if !ok {
 		return
 	}
-	for name := range project.Packages[sel[root]].Package.Require {
+	for name := range project.GetRequire(sel[root]) {
 		p, ok := dependList[name]
 		if !ok {
 			continue
 		}
+		dependList[name].Constraints[root] = true
 		if _, ok := installList[name]; ok {
 			continue
 		}
-		dependList[name].Constraints[root] = true
 		installList[name] = p.Packages[sel[name]].Package
 		updateInstallList(name)
 	}

@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"fmt"
-	"go-composer/semver"
 	"go-composer/util"
 	"sync"
 )
@@ -23,12 +22,12 @@ func GetDep(jsonPackage *JsonPackage) map[string]*Project {
 	if repoList == nil {
 		repoList = CreateManager(jsonPackage)
 	}
+
 	ch := make(chan int)
 	count := 0
-	for name, ver := range jsonPackage.Require {
-		ver = util.ReWriteConstraint(ver)
+	for name := range jsonPackage.Require {
 		//jsonPackage.Require[name] = ver
-		if !FilterRequire(&name, &ver) {
+		if !FilterRequire(&name) {
 			continue
 		}
 		count++
@@ -77,7 +76,7 @@ var metaDataReadyList sync.Map
 var metaDataGettingList sync.Map
 var failedList sync.Map
 
-func FilterRequire(name, ver *string) bool {
+func FilterRequire(name *string) bool {
 	_, ok := metaDataGettingList.Load(*name)
 	if ok {
 		return false
@@ -91,11 +90,6 @@ func FilterRequire(name, ver *string) bool {
 		return false
 	}
 	if !util.FilterRequire(*name) {
-		return false
-	}
-	_, err := semver.NewConstraint(*ver)
-	if err != nil {
-		//fmt.Printf("require version%s %s error : %s\r\n",*name, *ver, err)
 		return false
 	}
 	if _, ok = blackList[*name]; ok {

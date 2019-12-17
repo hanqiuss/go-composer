@@ -17,7 +17,7 @@ var versionRegex *regexp.Regexp
 var (
 	// ErrInvalidSemVer is returned a version is found to be invalid when
 	// being parsed.
-	ErrInvalidSemVer = errors.New("invalid Semantic Version")
+	ErrInvalidSemVer = errors.New("Invalid Semantic Version")
 
 	// ErrEmptyString is returned when an empty string is passed in for parsing.
 	ErrEmptyString = errors.New("version string empty")
@@ -38,10 +38,9 @@ var (
 )
 
 // semVerRegex is the regular expression used to parse a semantic version.
-const semVerRegex string = `v?([0-9]+)(\.[0-9]+)?(\.[0-9]+)?` +
+const semVerRegex string = `v?([0-9]+)(\.[0-9]+)?(\.[0-9x]+)?` +
 	`(-([0-9A-Za-z\-]+(\.[0-9A-Za-z\-]+)*))?` +
 	`(\+([0-9A-Za-z\-]+(\.[0-9A-Za-z\-]+)*))?`
-const modifierRegex string = `[._-]?(?:(stable|beta|b|RC|alpha|a|patch|pl|p)((?:[.-]?\d+)*+)?)?([.-]?dev)?`
 
 // Version represents a single semantic version.
 type Version struct {
@@ -49,7 +48,6 @@ type Version struct {
 	pre                 string
 	metadata            string
 	original            string
-	stabilities         string
 }
 
 func init() {
@@ -181,7 +179,7 @@ func NewVersion(v string) (*Version, error) {
 		sv.minor = 0
 	}
 
-	if m[3] != "" {
+	if m[3] != "" && strings.ToLower(m[3]) != ".x" {
 		sv.patch, err = strconv.ParseUint(strings.TrimPrefix(m[3], "."), 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing version segment: %s", err)
@@ -208,14 +206,14 @@ func NewVersion(v string) (*Version, error) {
 	return sv, nil
 }
 
-/*// MustParse parses a given version and panics on error.
+// MustParse parses a given version and panics on error.
 func MustParse(v string) *Version {
 	sv, err := NewVersion(v)
 	if err != nil {
 		panic(err)
 	}
 	return sv
-}*/
+}
 
 // String converts a Version object to a string.
 // Note, if the original version contained a leading v this version will not.
@@ -225,12 +223,15 @@ func MustParse(v string) *Version {
 func (v Version) String() string {
 	var buf bytes.Buffer
 
-	_, _ = fmt.Fprintf(&buf, "%d.%d.%d", v.major, v.minor, v.patch)
+_:
+	fmt.Fprintf(&buf, "%d.%d.%d", v.major, v.minor, v.patch)
 	if v.pre != "" {
-		_, _ = fmt.Fprintf(&buf, "-%s", v.pre)
+	_:
+		fmt.Fprintf(&buf, "-%s", v.pre)
 	}
 	if v.metadata != "" {
-		_, _ = fmt.Fprintf(&buf, "+%s", v.metadata)
+	_:
+		fmt.Fprintf(&buf, "+%s", v.metadata)
 	}
 
 	return buf.String()

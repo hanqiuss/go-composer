@@ -49,13 +49,13 @@ func Parse(dirs []Dir) map[string]string {
 }
 
 func processPath(pathList []Dir, fileCh chan<- *file) {
-	for _, path := range pathList {
-
-		err := filepath.Walk(path.Path, func(fPath string, f os.FileInfo, err error) error {
-			if f.IsDir() && len(path.Exclude) > 0 {
-				for _, exclude := range path.Exclude {
+	for _, path1 := range pathList {
+		path2 := path1
+		err := filepath.Walk(path2.Path, func(fPath string, f os.FileInfo, err error) error {
+			if f.IsDir() && len(path2.Exclude) > 0 {
+				for _, exclude := range path2.Exclude {
 					exclude = strings.ReplaceAll(exclude, "**", "")
-					if fPath == filepath.Join(path.Path, exclude) {
+					if fPath == filepath.Join(path2.Path, exclude) {
 						return filepath.SkipDir
 					}
 				}

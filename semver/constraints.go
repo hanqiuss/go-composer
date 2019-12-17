@@ -251,7 +251,7 @@ func parseConstraint(c string) (*constraint, error) {
 		if isX(m[3]) || m[3] == "" {
 			ver = "0.0.0"
 			dirty = true
-		} else if isX(strings.TrimPrefix(m[4], ".")) || m[4] == "" || m[5] == "" {
+		} else if isX(strings.TrimPrefix(m[4], ".")) || m[4] == "" {
 			minorDirty = true
 			dirty = true
 			ver = fmt.Sprintf("%s.0.0%s", m[3], m[6])
@@ -259,6 +259,10 @@ func parseConstraint(c string) (*constraint, error) {
 			dirty = true
 			patchDirty = true
 			ver = fmt.Sprintf("%s%s.0%s", m[3], m[4], m[6])
+		}
+		if m[1] == "~" && m[4] != "" && m[5] == "" {
+			minorDirty = true
+			dirty = true
 		}
 
 		con, err := NewVersion(ver)
@@ -268,7 +272,9 @@ func parseConstraint(c string) (*constraint, error) {
 			// we should never get here.
 			return nil, errors.New("constraint Parser Error")
 		}
-
+		if m[7] != "" {
+			con.pre = m[7]
+		}
 		cs.con = con
 		cs.minorDirty = minorDirty
 		cs.patchDirty = patchDirty
