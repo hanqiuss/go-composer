@@ -513,11 +513,7 @@ class ComposerAutoloaderInit{{.Hash}}
         $loader->setClassMapAuthoritative(true);
         $loader->register(true);
 
-        if ($useStaticLoader) {
-            $includeFiles = Composer\Autoload\ComposerStaticInit{{.Hash}}::$files;
-        } else {
-            $includeFiles = require __DIR__ . '/autoload_files.php';
-        }
+        $includeFiles = require __DIR__ . '/autoload_files.php';
         foreach ($includeFiles as $fileIdentifier => $file) {
             composerRequire{{.Hash}}($fileIdentifier, $file);
         }
