@@ -52,7 +52,8 @@ func processPath(pathList []Dir, fileCh chan<- *file) {
 	for _, path1 := range pathList {
 		path2 := path1
 		err := filepath.Walk(path2.Path, func(fPath string, f os.FileInfo, err error) error {
-			if f.IsDir() && len(path2.Exclude) > 0 {
+			checkErr(err)
+			if f.IsDir() && path2.Exclude != nil && len(path2.Exclude) > 0 {
 				for _, exclude := range path2.Exclude {
 					exclude = strings.ReplaceAll(exclude, "**", "")
 					if fPath == filepath.Join(path2.Path, exclude) {

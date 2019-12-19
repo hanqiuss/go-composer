@@ -38,6 +38,7 @@ type JsonPackage struct {
 	Description  string                 `json:"description"`
 	Repositories JsonRepositories       `json:"repositories"`
 }
+
 type JsonVersionPackages map[string]*JsonPackage
 type JsonPackages struct {
 	Packages map[string]*JsonVersionPackages // [name:Packages]
@@ -97,6 +98,24 @@ type JsonNpmPackage struct {
 type JsonNpmVersionPackage map[string]*JsonNpmPackage
 type JsonNpmPackages struct {
 	Versions JsonNpmVersionPackage
+}
+
+func NewJsonPackage() *JsonPackage {
+	return &JsonPackage{}
+}
+func NewPackage(ver string, p *JsonPackage) *Package {
+	s := strings.Split(ver, ".")
+	if len(s) > 3 {
+		ver = strings.Join(s[:3], ".")
+	}
+	newVersion, err := semver.NewVersion(ver)
+	if err != nil || newVersion == nil {
+		return nil
+	}
+	if p == nil {
+		p = NewJsonPackage()
+	}
+	return &Package{newVersion, p}
 }
 
 type ColJsonPkg []*JsonPackage

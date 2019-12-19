@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-composer/cache"
-	"go-composer/semver"
 	"net/url"
 	"sort"
 	"strings"
@@ -69,18 +68,11 @@ func (c *Composer) getRepoUrl(name string) string {
 func getPackages(packages *JsonVersionPackages) Packages {
 	ret := Packages{}
 	for v, p := range *packages {
-		s := strings.Split(v, ".")
-		if len(s) > 3 {
-			v = strings.Join(s[:3], ".")
-		}
-		if strings.Contains(v, "dev") {
-			v = v + ""
-		}
-		version, err := semver.NewVersion(v)
-		if err != nil || version == nil {
+		pkg := NewPackage(v, p)
+		if pkg == nil {
 			continue
 		}
-		ret = append(ret, &Package{version, p})
+		ret = append(ret, pkg)
 	}
 	sort.Sort(sort.Reverse(ret))
 	return ret

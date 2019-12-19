@@ -34,8 +34,13 @@ func Solver(p *repositories.JsonPackage) {
 		Packages:    repositories.Packages{&repositories.Package{Version: rootVersion, Package: p}},
 	}
 	dependList = dep
-	fmt.Println("start solve sat", time.Now())
-
+	fmt.Println("start solve at", time.Now())
+	phpPkg := &repositories.Package{Version: util.Conf.PhpVer, Package: repositories.NewJsonPackage()}
+	phpPkg.Package.Name = "php"
+	dependList["php"] = &repositories.Project{
+		Constraints: make(map[string]bool),
+		Packages:    repositories.Packages{phpPkg},
+	}
 	for !checkDep() {
 		if !solveDep() {
 			fmt.Println("solver error")
@@ -52,6 +57,10 @@ type selected map[string]int
 func (s selected) set(n string, i int) {
 	if i >= len(dependList[n].Packages) {
 		s[n] = len(dependList[n].Packages)
+		return
+	}
+	if i == s[n] {
+		return
 	}
 	old := s[n]
 	r1 := dependList[n].GetRequire(old)
@@ -99,10 +108,11 @@ func solveDep() bool {
 	return true
 }
 func solveDepByName(name string) bool {
+	start := 0
 	for {
 	begin:
 		cts := dependList[name].Constraints
-		max := 0
+		max := -1
 		max2 := 0
 		nameList := make([]string, 0)
 		ctsList := make([]*semver.Constraints, 0)
@@ -123,14 +133,12 @@ func solveDepByName(name string) bool {
 				goto begin
 			}
 			ps := dependList[name].Packages
-			index := getCheckVersionIndex(curCts, ps, 0)
-			if index == len(dependList[name].Packages) {
-				fmt.Printf("package %s need %s %s, no match\r\n", depByName, name, str)
-				sel.add(depByName)
-				goto begin
-			}
 			ctsList = append(ctsList, curCts)
 			nameList = append(nameList, depByName)
+			index := getCheckVersionIndex(curCts, ps, start)
+			if index == len(dependList[name].Packages) {
+				continue
+			}
 			if max < index {
 				max = index
 			}
@@ -141,7 +149,7 @@ func solveDepByName(name string) bool {
 		n := len(dependList[name].Packages)
 		// check is some version match all constraints
 		max2 = max
-		for max < n {
+		for max < n && max >= 0 {
 			p := dependList[name].Packages[max]
 			check := true
 			for _, cts := range ctsList {
@@ -151,6 +159,11 @@ func solveDepByName(name string) bool {
 				}
 			}
 			if check {
+				//is some require make it down but now it can up ? if can't upgrade, start from sel[name]
+				if max < sel[name] && !checkPackageRequireOk(dependList[name].Packages[max].Package) {
+					start = sel[name]
+					goto begin
+				}
 				sel.set(name, max)
 				return true
 			}
@@ -171,6 +184,7 @@ func _solveMultipleDown(l []string, name string, start int) bool {
 	}
 	p := dependList[name].Packages
 	end := len(p)
+	var failed []string
 	for _, depByName := range l {
 		endDepBy := len(dependList[depByName].Packages)
 		startDepBy := 0
@@ -178,7 +192,7 @@ func _solveMultipleDown(l []string, name string, start int) bool {
 			str := dependList[depByName].Packages[startDepBy].Package.Require[name]
 			str = util.ReWriteConstraint(str)
 			if str == "" || str == "*" {
-				sel.set(depByName, startDepBy)
+				sel[depByName] = startDepBy
 				break
 			}
 			curCts, err := semver.NewConstraint(str)
@@ -186,12 +200,20 @@ func _solveMultipleDown(l []string, name string, start int) bool {
 				continue
 			}
 			if i := getCheckVersionIndex(curCts, p, start); i < end {
-				sel.set(depByName, startDepBy)
+				sel[depByName] = startDepBy
 				break
 			}
 		}
 		if startDepBy >= endDepBy {
-			fmt.Println("_solveMultipleDown error no match ", depByName, name)
+			failed = append(failed, depByName)
+			continue
+		}
+	}
+	updateInstallList("root")
+	for _, s := range failed {
+		if _, ok := dependList[name].Constraints[s]; ok {
+			//some require item error
+			fmt.Println("_solveMultipleDown error no match ", s, name)
 			return false
 		}
 	}
@@ -238,6 +260,23 @@ func checkDep() bool {
 	}
 	return true
 }
+
+func checkPackageRequireOk(p *repositories.JsonPackage) bool {
+	for name, vStr := range p.Require {
+		if vStr == "" || vStr == "*" {
+			continue
+		}
+		vStr = util.ReWriteConstraint(vStr)
+		ct, err := semver.NewConstraint(vStr)
+		if err != nil {
+			continue
+		}
+		if !ct.Check(dependList[name].Packages[sel[name]].Version) {
+			return false
+		}
+	}
+	return true
+}
 func updateInstallList(root string) (list map[string]*repositories.JsonPackage) {
 	if root == "root" {
 		installList = make(map[string]*repositories.JsonPackage)
@@ -268,6 +307,7 @@ func install() {
 	count := 0
 	lock := repositories.JsonLock{}
 	delete(installList, "root")
+	delete(installList, "php")
 	numCpu := runtime.NumCPU() * 2
 	pkgCh := make(chan *repositories.JsonPackage, numCpu)
 	resultCh := make(chan int, numCpu)
@@ -306,6 +346,9 @@ func installEnd(lock repositories.JsonLock) {
 	err := util.JsonDataToFile("composer.lock", lock)
 	if err != nil {
 		fmt.Println("write lock file error ", err)
+	}
+	if util.Conf.LockOnly {
+		return
 	}
 	lock.Packages = append(lock.Packages, lock.PackagesDev...)
 	lock.Sort()
@@ -359,12 +402,14 @@ func installWorker(fileCh <-chan *repositories.JsonPackage, result chan<- int) {
 		if !ok {
 			return
 		}
-		t1 := time.Now()
-		err := cacheObj.Install(p.Name, p.Dist.Url, p.Dist.Type)
-		if err != nil {
-			fmt.Println(err)
+		if !util.Conf.LockOnly {
+			t1 := time.Now()
+			err := cacheObj.Install(p.Name, p.Dist.Url, p.Dist.Type)
+			if err != nil {
+				fmt.Println(err)
+			}
+			fmt.Printf("  - install %s version %s time: %s\r\n", p.Name, p.Version, time.Now().Sub(t1))
 		}
-		fmt.Printf("  - install %s version %s time: %s\r\n", p.Name, p.Version, time.Now().Sub(t1))
 		result <- 1
 	}
 }
