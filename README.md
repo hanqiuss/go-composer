@@ -26,7 +26,7 @@ go-composer -d=../test -lockonly -php=7.2.25 -pro
 
 | flag  |                description                   |
 |-------|----------------------------------------------|
-| -d=<dir>         | 指定工作目录，目录下需要有`composer.json`文件   |
-| -lockonly        | 仅生成 `composer.lock` 文件           |
-| -php=<version>   | 指定`php`版本            |
-| -pro             | 不安装require-dev包          |
+| `-d=<dir>`         | 指定工作目录，目录下需要有`composer.json`文件   |
+| `-lockonly`       | 仅生成 `composer.lock` 文件           |
+| `-php=<version>`   | 指定`php`版本            |
+| `-pro`             | 不安装require-dev包          |
