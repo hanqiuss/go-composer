@@ -25,11 +25,12 @@ type JsonDist struct {
 }
 type JsonSource JsonDist
 type JsonPackage struct {
-	Name         string                 `json:"name"`
-	Version      string                 `json:"version"`
-	Source       *JsonSource            `json:"source"`
-	Dist         *JsonDist              `json:"dist"`
-	Require      map[string]string      `json:"require"`
+	Name         string            `json:"name"`
+	Version      string            `json:"version"`
+	Source       *JsonSource       `json:"source"`
+	Dist         *JsonDist         `json:"dist"`
+	Require      map[string]string `json:"require"`
+	Replace      map[string]string
 	RequireDev   map[string]string      `json:"require-dev"`
 	Type         string                 `json:"type"`
 	Extra        interface{}            `json:"extra"`
@@ -104,9 +105,13 @@ func NewJsonPackage() *JsonPackage {
 	return &JsonPackage{}
 }
 func NewPackage(ver string, p *JsonPackage) *Package {
+	s1 := strings.Split(ver, "-")
 	s := strings.Split(ver, ".")
 	if len(s) > 3 {
 		ver = strings.Join(s[:3], ".")
+		if len(s1) > 1 {
+			ver = ver + "-" + s1[1]
+		}
 	}
 	newVersion, err := semver.NewVersion(ver)
 	if err != nil || newVersion == nil {

@@ -34,6 +34,8 @@ func Solver(p *repositories.JsonPackage) {
 		Packages:    repositories.Packages{&repositories.Package{Version: rootVersion, Package: p}},
 	}
 	dependList = dep
+	fmt.Println("start replace at", time.Now())
+	checkReplace()
 	fmt.Println("start solve at", time.Now())
 	phpPkg := &repositories.Package{Version: util.Conf.PhpVer, Package: repositories.NewJsonPackage()}
 	phpPkg.Package.Name = "php"
@@ -303,12 +305,13 @@ func updateInstallList(root string) (list map[string]*repositories.JsonPackage) 
 	return installList
 }
 func install() {
+	deleteReplace()
 	markDev()
 	count := 0
 	lock := repositories.JsonLock{}
 	delete(installList, "root")
 	delete(installList, "php")
-	numCpu := runtime.NumCPU() * 2
+	numCpu := runtime.NumCPU() * 5
 	pkgCh := make(chan *repositories.JsonPackage, numCpu)
 	resultCh := make(chan int, numCpu)
 	// run 4 concurrent parserWorkers
@@ -356,6 +359,7 @@ func installEnd(lock repositories.JsonLock) {
 	if err != nil {
 		fmt.Println("write installed.json file error ", err)
 	}
+	installList["root"] = dependList["root"].Packages[0].Package
 	err = template.Generated(installList)
 	if err != nil {
 		fmt.Println(err)
@@ -411,6 +415,64 @@ func installWorker(fileCh <-chan *repositories.JsonPackage, result chan<- int) {
 			fmt.Printf("  - install %s version %s time: %s\r\n", p.Name, p.Version, time.Now().Sub(t1))
 		}
 		result <- 1
+	}
+}
+func checkReplace() {
+	for name, project := range dependList {
+		for _, pkg := range project.Packages {
+			if pkg.Package.Name != name {
+				continue
+			}
+			for replace, c := range pkg.Package.Replace {
+				if replace == name {
+					continue
+				}
+				isVer := false
+				if c == "self.version" {
+					c = pkg.Package.Version
+					isVer = true
+				}
+				constraint, err := semver.NewConstraint(c)
+				if err != nil {
+					continue
+				}
+
+				if _, ok := dependList[replace]; ok {
+					for _, pkg2 := range dependList[replace].Packages {
+						if pkg2.Package.Name != replace {
+							continue
+						}
+						if constraint.Check(pkg2.Version) {
+							pkg2.Package = pkg.Package
+							if isVer {
+								goto labelEnd
+							}
+						}
+						if isVer && pkg.Version.GreaterThan(pkg2.Version) {
+							break
+						}
+					}
+					if isVer {
+						dependList[replace].Packages = append(dependList[replace].Packages, pkg)
+					}
+				}
+			labelEnd:
+			}
+		}
+	}
+	for _, project := range dependList {
+		sort.Sort(sort.Reverse(project.Packages))
+	}
+}
+func deleteReplace() {
+	for name, jsonPackage := range installList {
+		_, ok := installList[jsonPackage.Name]
+		if !ok {
+			installList[jsonPackage.Name] = jsonPackage
+		}
+		if jsonPackage.Name != name {
+			delete(installList, name)
+		}
 	}
 }
 
