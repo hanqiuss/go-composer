@@ -31,6 +31,7 @@ func Solver(p *repositories.JsonPackage) {
 	dep := repositories.GetDep(p)
 	dep["root"] = &repositories.Project{
 		Constraints: make(map[string]bool),
+		Conflicts:   map[string]bool{},
 		Packages:    repositories.Packages{&repositories.Package{Version: rootVersion, Package: p}},
 	}
 	dependList = dep
@@ -41,6 +42,7 @@ func Solver(p *repositories.JsonPackage) {
 	phpPkg.Package.Name = "php"
 	dependList["php"] = &repositories.Project{
 		Constraints: make(map[string]bool),
+		Conflicts:   map[string]bool{},
 		Packages:    repositories.Packages{phpPkg},
 	}
 	for !checkDep() {
@@ -114,16 +116,26 @@ func solveDepByName(name string) bool {
 	for {
 	begin:
 		cts := dependList[name].Constraints
+		for ccc := range dependList[name].Conflicts {
+			cts[ccc] = false
+		}
 		max := -1
 		max2 := 0
 		nameList := make([]string, 0)
-		ctsList := make([]*semver.Constraints, 0)
+		ctsList := make(map[*semver.Constraints]bool)
 		// get the top index of  the match version
-		for depByName := range cts {
+		for depByName, require := range cts {
 			if sel[depByName] >= len(dependList[depByName].Packages) {
 				return false
 			}
-			str, ok := dependList[depByName].Packages[sel[depByName]].Package.Require[name]
+			str := ""
+			ok := false
+			if require {
+				str, ok = dependList[depByName].Packages[sel[depByName]].Package.Require[name]
+			} else {
+				str, ok = dependList[depByName].Packages[sel[depByName]].Package.Conflict[name]
+
+			}
 			if !ok {
 				continue
 			}
@@ -135,9 +147,10 @@ func solveDepByName(name string) bool {
 				goto begin
 			}
 			ps := dependList[name].Packages
-			ctsList = append(ctsList, curCts)
+			ctsList[curCts] = require
+			//ctsList = append(ctsList, curCts)
 			nameList = append(nameList, depByName)
-			index := getCheckVersionIndex(curCts, ps, start)
+			index := getCheckVersionIndex(curCts, ps, start, require)
 			if index == len(dependList[name].Packages) {
 				continue
 			}
@@ -154,8 +167,8 @@ func solveDepByName(name string) bool {
 		for max < n && max >= 0 {
 			p := dependList[name].Packages[max]
 			check := true
-			for _, cts := range ctsList {
-				if !cts.Check(p.Version) {
+			for ctStr, require := range ctsList {
+				if ctStr.Check(p.Version) != require {
 					check = false
 					break
 				}
@@ -191,7 +204,12 @@ func _solveMultipleDown(l []string, name string, start int) bool {
 		endDepBy := len(dependList[depByName].Packages)
 		startDepBy := 0
 		for startDepBy = sel[depByName]; startDepBy < endDepBy; startDepBy++ {
-			str := dependList[depByName].Packages[startDepBy].Package.Require[name]
+			require := true
+			str, ok := dependList[depByName].GetRequire(startDepBy)[name]
+			if !ok {
+				require = false
+				str = dependList[depByName].GetConflicts(startDepBy)[name]
+			}
 			str = util.ReWriteConstraint(str)
 			if str == "" || str == "*" {
 				sel[depByName] = startDepBy
@@ -201,7 +219,7 @@ func _solveMultipleDown(l []string, name string, start int) bool {
 			if err != nil {
 				continue
 			}
-			if i := getCheckVersionIndex(curCts, p, start); i < end {
+			if i := getCheckVersionIndex(curCts, p, start, require); i < end {
 				sel[depByName] = startDepBy
 				break
 			}
@@ -221,13 +239,20 @@ func _solveMultipleDown(l []string, name string, start int) bool {
 	}
 	return true
 }
-func getCheckVersionIndex(cts *semver.Constraints, p repositories.Packages, start int) int {
+
+/*
+cts 	version constraint
+p       current package list
+start   start index
+require is require or conflict
+*/
+func getCheckVersionIndex(cts *semver.Constraints, p repositories.Packages, start int, require bool) int {
 	i := len(p)
 	for j := start; j < i; j++ {
 		if p[j].Version == nil {
 			continue
 		}
-		if cts.Check(p[j].Version) {
+		if cts.CheckPre(p[j].Version) && cts.Check(p[j].Version) == require {
 			i = j
 		}
 	}
@@ -258,7 +283,21 @@ func checkDep() bool {
 				return false
 			}
 		}
-
+		for conflict := range dependList[name].Conflicts {
+			str, ok := dependList[conflict].Packages[sel[conflict]].Package.Conflict[name]
+			if !ok {
+				continue
+			}
+			str = util.ReWriteConstraint(str)
+			ct, err := semver.NewConstraint(str)
+			if err != nil {
+				fmt.Println("check error : error constraints", str)
+				continue
+			}
+			if ct.Check(ver) {
+				return false
+			}
+		}
 	}
 	return true
 }
@@ -284,6 +323,7 @@ func updateInstallList(root string) (list map[string]*repositories.JsonPackage) 
 		installList = make(map[string]*repositories.JsonPackage)
 		for _, p := range dependList {
 			p.Constraints = make(map[string]bool)
+			p.Conflicts = make(map[string]bool)
 		}
 	}
 	project, ok := dependList[root]
@@ -301,6 +341,13 @@ func updateInstallList(root string) (list map[string]*repositories.JsonPackage) 
 		}
 		installList[name] = p.Packages[sel[name]].Package
 		updateInstallList(name)
+	}
+	for name := range project.GetConflicts(sel[root]) {
+		_, ok := dependList[name]
+		if !ok {
+			continue
+		}
+		dependList[name].Conflicts[root] = true
 	}
 	return installList
 }
@@ -346,6 +393,14 @@ func install() {
 }
 func installEnd(lock repositories.JsonLock) {
 	lock.Sort()
+	for _, p := range lock.Packages {
+		p.NotificationUrl = "https://packagist.org/downloads/"
+		sort.Strings(p.Keywords)
+	}
+	for _, p := range lock.PackagesDev {
+		p.NotificationUrl = "https://packagist.org/downloads/"
+		sort.Strings(p.Keywords)
+	}
 	err := util.JsonDataToFile("composer.lock", lock)
 	if err != nil {
 		fmt.Println("write lock file error ", err)
@@ -439,11 +494,11 @@ func checkReplace() {
 
 				if _, ok := dependList[replace]; ok {
 					for _, pkg2 := range dependList[replace].Packages {
-						if pkg2.Package.Name != replace {
-							continue
-						}
 						if constraint.Check(pkg2.Version) {
-							pkg2.Package = pkg.Package
+							if pkg2.Replace != nil {
+								goto labelEnd
+							}
+							pkg2.Replace = pkg.Package
 							if isVer {
 								goto labelEnd
 							}
@@ -452,9 +507,13 @@ func checkReplace() {
 							break
 						}
 					}
-					if isVer {
-						dependList[replace].Packages = append(dependList[replace].Packages, pkg)
-					}
+					/*					if isVer {
+										dependList[replace].Packages = append(dependList[replace].Packages, &repositories.Package{
+											Version: pkg.Version,
+											Package: pkg.Package,
+											Replace: pkg.Package,
+										})
+									}*/
 				}
 			labelEnd:
 			}
@@ -465,13 +524,11 @@ func checkReplace() {
 	}
 }
 func deleteReplace() {
-	for name, jsonPackage := range installList {
-		_, ok := installList[jsonPackage.Name]
-		if !ok {
-			installList[jsonPackage.Name] = jsonPackage
-		}
-		if jsonPackage.Name != name {
-			delete(installList, name)
+	for name := range installList {
+		if r := dependList[name].Packages[sel[name]].Replace; r != nil {
+			if _, ok := installList[r.Name]; ok {
+				delete(installList, name)
+			}
 		}
 	}
 }

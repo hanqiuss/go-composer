@@ -22,22 +22,48 @@ type JsonDist struct {
 	Type      string `json:"type"`
 	Url       string `json:"url"`
 	Reference string `json:"reference"`
+	Shasum    string `json:"shasum"`
 }
-type JsonSource JsonDist
+type JsonSource struct {
+	Type      string `json:"type"`
+	Url       string `json:"url"`
+	Reference string `json:"reference"`
+}
+type JsonAutoLoad struct {
+	Psr4                interface{} `json:"psr-4,omitempty"`
+	Psr0                interface{} `json:"psr-0,omitempty"`
+	Files               interface{} `json:"files,omitempty"`
+	ExcludeFromClassMap interface{} `json:"exclude-from-classmap,omitempty"`
+	ClassMap            interface{} `json:"classmap,omitempty"`
+}
 type JsonPackage struct {
-	Name         string            `json:"name"`
-	Version      string            `json:"version"`
-	Source       *JsonSource       `json:"source"`
-	Dist         *JsonDist         `json:"dist"`
-	Require      map[string]string `json:"require"`
-	Replace      map[string]string
-	RequireDev   map[string]string      `json:"require-dev"`
-	Type         string                 `json:"type"`
-	Extra        interface{}            `json:"extra"`
-	AutoLoad     map[string]interface{} `json:"autoload"`
-	License      interface{}            `json:"license"`
-	Description  string                 `json:"description"`
-	Repositories JsonRepositories       `json:"repositories"`
+	Name            string            `json:"name"`
+	Version         string            `json:"version"`
+	Source          *JsonSource       `json:"source"`
+	Dist            *JsonDist         `json:"dist"`
+	Require         map[string]string `json:"require,omitempty"`
+	Conflict        map[string]string `json:"conflict,omitempty"`
+	Provide         interface{}       `json:"provide,omitempty"`
+	Replace         map[string]string `json:"replace,omitempty"`
+	RequireDev      map[string]string `json:"require-dev,omitempty"`
+	Suggest         interface{}       `json:"suggest,omitempty"`
+	Bin             interface{}       `json:"bin,omitempty"`
+	Type            string            `json:"type"`
+	Extra           interface{}       `json:"extra,omitempty"`
+	AutoLoad        *JsonAutoLoad     `json:"autoload,omitempty"`
+	NotificationUrl string            `json:"notification-url"`
+	License         interface{}       `json:"license"`
+	Authors         []struct {
+		Name     string `json:"name,omitempty"`
+		Email    string `json:"email,omitempty"`
+		Homepage string `json:"homepage,omitempty"`
+		Role     string `json:"role,omitempty"`
+	} `json:"authors,omitempty"`
+	Description  string           `json:"description,omitempty"`
+	Repositories JsonRepositories `json:"repositories,omitempty"`
+	Homepage     string           `json:"homepage,omitempty"`
+	Keywords     []string         `json:"keywords,omitempty"`
+	Time         string           `json:"time,omitempty"`
 }
 
 type JsonVersionPackages map[string]*JsonPackage
@@ -63,10 +89,12 @@ type JsonRepositories interface{}
 type Package struct {
 	Version *semver.Version
 	Package *JsonPackage
+	Replace *JsonPackage // Package.Package will replaced by Package.Replace
 }
 
 type Project struct {
 	Constraints map[string]bool
+	Conflicts   map[string]bool
 	Packages    Packages
 	IsDev       bool
 }
@@ -76,6 +104,9 @@ func (p *Project) GetPackages(index int) *Package {
 }
 func (p *Project) GetRequire(index int) map[string]string {
 	return p.Packages[index].Package.Require
+}
+func (p *Project) GetConflicts(index int) map[string]string {
+	return p.Packages[index].Package.Conflict
 }
 
 type JsonNpmPackage struct {
@@ -120,7 +151,7 @@ func NewPackage(ver string, p *JsonPackage) *Package {
 	if p == nil {
 		p = NewJsonPackage()
 	}
-	return &Package{newVersion, p}
+	return &Package{newVersion, p, nil}
 }
 
 type ColJsonPkg []*JsonPackage

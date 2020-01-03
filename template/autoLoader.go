@@ -571,9 +571,8 @@ func Generated(l map[string]*repositories.JsonPackage) error {
 	for name, pkg := range l {
 		excs := []string{"/Tests/", "/test/", "/tests/"}
 		psr := make([]parse.Dir, 0)
-		for k, v := range pkg.AutoLoad {
-			switch k {
-			case "classmap":
+		if pkg.AutoLoad != nil {
+			if v := pkg.AutoLoad.ClassMap; v != nil {
 				vl := make([]interface{}, 0)
 				switch v.(type) {
 				case map[string]interface{}:
@@ -599,16 +598,30 @@ func Generated(l map[string]*repositories.JsonPackage) error {
 						}
 					}
 				}
-			case "exclude-from-classmap":
+			}
+			if v := pkg.AutoLoad.ExcludeFromClassMap; v != nil {
 				for _, vv := range v.([]interface{}) {
 					excs = append(excs, vv.(string))
 				}
-			case "files":
+			}
+			if v := pkg.AutoLoad.Files; v != nil {
 				for _, vv := range v.([]interface{}) {
 					h := util.MD5ToString([]byte(name + vv.(string)))
 					files[h] = "/" + path.Join(name, vv.(string))
 				}
-			case "psr-4", "psr-0":
+			}
+			if v := pkg.AutoLoad.Psr0; v != nil {
+				psrMapp := parsePsr(v)
+				for _, paths := range psrMapp {
+					for _, s := range paths {
+						psr = append(psr, parse.Dir{
+							Path:    filepath.Join(dir, name, s),
+							Exclude: make([]string, 0),
+						})
+					}
+				}
+			}
+			if v := pkg.AutoLoad.Psr4; v != nil {
 				psrMapp := parsePsr(v)
 				for _, paths := range psrMapp {
 					for _, s := range paths {
@@ -636,19 +649,25 @@ func Generated(l map[string]*repositories.JsonPackage) error {
 	data.Files = files
 	// root dir psr auto load
 	psr := make(map[string][]string)
-	for k, v := range rootPkg.AutoLoad {
-		switch k {
-		case "psr-4", "psr-0":
-			for s, paths := range parsePsr(v) {
-				s = strings.ReplaceAll(s, `\`, `\\`)
-				for k, s2 := range paths {
-					paths[k] = strings.Trim(s2, "/")
-				}
-				psr[s] = paths
+	if v := rootPkg.AutoLoad.Psr0; v != nil {
+		for s, paths := range parsePsr(v) {
+			s = strings.ReplaceAll(s, `\`, `\\`)
+			for k, s2 := range paths {
+				paths[k] = strings.Trim(s2, "/")
 			}
-			data.RootPsr = psr
+			psr[s] = paths
 		}
 	}
+	if v := rootPkg.AutoLoad.Psr4; v != nil {
+		for s, paths := range parsePsr(v) {
+			s = strings.ReplaceAll(s, `\`, `\\`)
+			for k, s2 := range paths {
+				paths[k] = strings.Trim(s2, "/")
+			}
+			psr[s] = paths
+		}
+	}
+	data.RootPsr = psr
 	var tmpList []*tmp
 	tmpList = append(tmpList, &tmp{templateAutoLoad, dir + "autoload.php", data, nil})
 	dir = dir + "composer/"

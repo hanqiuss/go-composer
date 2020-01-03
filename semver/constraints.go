@@ -109,6 +109,16 @@ func (cs Constraints) Validate(v *Version) (bool, []error) {
 
 	return false, e
 }
+func (cs Constraints) CheckPre(v *Version) bool {
+	for _, o := range cs.constraints {
+		for _, c := range o {
+			if c.con.pre == "" && v.pre != "" {
+				return false
+			}
+		}
+	}
+	return true
+}
 
 func (cs Constraints) String() string {
 	buf := make([]string, len(cs.constraints))

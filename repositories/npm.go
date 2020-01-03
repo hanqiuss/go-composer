@@ -53,6 +53,7 @@ func (r *Npm) GetPackages(name string) *Project {
 	}
 	return &Project{
 		Constraints: make(map[string]bool),
+		Conflicts:   map[string]bool{},
 		Packages:    getPackages(&packages),
 	}
 }

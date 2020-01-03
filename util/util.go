@@ -103,8 +103,10 @@ func JsonDataToFile(f string, data interface{}) error {
 	if err != nil {
 		return fmt.Errorf("json encode error %s", err)
 	}
+	bs := strings.ReplaceAll(string(b), "\\u003e", ">")
+	bs = strings.ReplaceAll(bs, "\\u003c", "<")
 	var buf bytes.Buffer
-	err = json.Indent(&buf, b, "", "    ")
+	err = json.Indent(&buf, []byte(bs), "", "    ")
 	if err != nil {
 		return fmt.Errorf("json Indent error %s", err)
 	}
