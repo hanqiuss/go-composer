@@ -649,22 +649,24 @@ func Generated(l map[string]*repositories.JsonPackage) error {
 	data.Files = files
 	// root dir psr auto load
 	psr := make(map[string][]string)
-	if v := rootPkg.AutoLoad.Psr0; v != nil {
-		for s, paths := range parsePsr(v) {
-			s = strings.ReplaceAll(s, `\`, `\\`)
-			for k, s2 := range paths {
-				paths[k] = strings.Trim(s2, "/")
+	if rootPkg.AutoLoad != nil {
+		if v := rootPkg.AutoLoad.Psr0; v != nil {
+			for s, paths := range parsePsr(v) {
+				s = strings.ReplaceAll(s, `\`, `\\`)
+				for k, s2 := range paths {
+					paths[k] = strings.Trim(s2, "/")
+				}
+				psr[s] = paths
 			}
-			psr[s] = paths
 		}
-	}
-	if v := rootPkg.AutoLoad.Psr4; v != nil {
-		for s, paths := range parsePsr(v) {
-			s = strings.ReplaceAll(s, `\`, `\\`)
-			for k, s2 := range paths {
-				paths[k] = strings.Trim(s2, "/")
+		if v := rootPkg.AutoLoad.Psr4; v != nil {
+			for s, paths := range parsePsr(v) {
+				s = strings.ReplaceAll(s, `\`, `\\`)
+				for k, s2 := range paths {
+					paths[k] = strings.Trim(s2, "/")
+				}
+				psr[s] = paths
 			}
-			psr[s] = paths
 		}
 	}
 	data.RootPsr = psr
