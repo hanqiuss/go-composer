@@ -30,3 +30,4 @@ go-composer -d=../test -lockonly -php=7.2.25 -pro
 | `-lockonly`       | 仅生成 `composer.lock` 文件           |
 | `-php=<version>`   | 指定`php`版本            |
 | `-pro`             | 不安装require-dev包          |
+| `-cp`             | create project 创建项目 需要指定目录 -d 参数         |

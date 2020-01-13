@@ -10,6 +10,7 @@ import (
 	"go-composer/template"
 	"go-composer/util"
 	"io/ioutil"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"time"
@@ -379,7 +380,7 @@ func install() {
 		}
 	}
 	// generated .lock file
-	cData, _ := ioutil.ReadFile("composer.json")
+	cData, _ := ioutil.ReadFile(filepath.Join(util.Conf.Cwd, "composer.json"))
 	h := md5.Sum(cData)
 	lock.Hash = hex.EncodeToString(h[:])
 

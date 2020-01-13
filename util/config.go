@@ -10,12 +10,13 @@ import (
 )
 
 type Config struct {
-	Cwd       string
-	VendorDir string
-	CacheDir  string
-	Dev       bool
-	PhpVer    *semver.Version
-	LockOnly  bool
+	Cwd         string
+	VendorDir   string
+	CacheDir    string
+	Dev         bool
+	PhpVer      *semver.Version
+	LockOnly    bool
+	ProjectName string
 }
 
 const NpmPkgType = "tar"
@@ -23,12 +24,14 @@ const NpmPkgType = "tar"
 var Conf Config
 
 func init() {
-	var cwd, phpV string
+	var cwd, phpV, project string
 	flag.StringVar(&cwd, "d", "", "work dir")
 	flag.StringVar(&phpV, "php", "", "php version")
+	flag.StringVar(&project, "cp", "", "create project")
 	var pro = flag.Bool("pro", false, "install pro packages")
 	var lock = flag.Bool("lockonly", false, "only make .lock file")
 	flag.Parse()
+	Conf.ProjectName = project
 	getPhpVer(phpV)
 	getCwd(cwd)
 	getCacheDir()

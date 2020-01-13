@@ -96,24 +96,39 @@ func (c *Base) CreateManifestDir(host string) {
 	if err != nil {
 	}
 }
+
+/* 在vendor下安装 */
 func (c *Base) Install(name, url, typ string) error {
-	if name == "" {
+	return c.InstallPath(name, url, typ, filepath.Join(util.Conf.VendorDir, name))
+}
+
+/* 在指定路径安装软件包
+pName    软件包名
+url      下载路径
+typ      压缩方式
+dst      安装路径
+*/
+func (c *Base) InstallPath(pName, url, typ, dst string) error {
+	if pName == "" {
 		return fmt.Errorf("install name empty, url : %s type : %s", url, typ)
 	}
-	file := c.getFilePath(name, url, typ)
+	file := c.getFilePath(pName, url, typ)
 	_, err := util.DownloadExist(url, file, false)
 	if err != nil {
 		return fmt.Errorf("download error %s", err)
 	}
-	p := filepath.Join(util.Conf.VendorDir, name)
 	switch typ {
 	case "zip":
-		return Unzip(p, file)
+		return Unzip(dst, file)
 	case util.NpmPkgType:
-		return UnTgz(p, file)
+		return UnTgz(dst, file)
 	}
-	return Unzip(p, file)
+	return Unzip(dst, file)
 }
+
+/*
+  解压 .zip 包到指定目录
+*/
 func Unzip(dir, zipFile string) error {
 	err := clearDir(dir)
 	if err != nil {
@@ -171,6 +186,10 @@ func Unzip(dir, zipFile string) error {
 
 	return nil
 }
+
+/*
+  解压 .tar.gz 或 .tgz  包到指定目录
+*/
 func UnTgz(dir, tgzFile string) error {
 	err := clearDir(dir)
 	if err != nil {

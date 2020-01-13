@@ -567,7 +567,7 @@ func Generated(l map[string]*repositories.JsonPackage) error {
 	delete(l, "root")
 	ps := make([]parse.Dir, 0)
 	files := make(map[string]string)
-	dir := "vendor/"
+	dir := util.Conf.VendorDir
 	for name, pkg := range l {
 		excs := []string{"/Tests/", "/test/", "/tests/"}
 		psr := make([]parse.Dir, 0)
@@ -637,7 +637,7 @@ func Generated(l map[string]*repositories.JsonPackage) error {
 			ps = append(ps, psr...)
 		} else {
 			ps = append(ps, parse.Dir{
-				Path:    dir + name,
+				Path:    filepath.Join(dir, name),
 				Exclude: excs,
 			})
 		}
@@ -671,13 +671,13 @@ func Generated(l map[string]*repositories.JsonPackage) error {
 	}
 	data.RootPsr = psr
 	var tmpList []*tmp
-	tmpList = append(tmpList, &tmp{templateAutoLoad, dir + "autoload.php", data, nil})
-	dir = dir + "composer/"
-	tmpList = append(tmpList, &tmp{templateReal, dir + "autoload_real.php", data, nil})
-	tmpList = append(tmpList, &tmp{templateFiles, dir + "autoload_files.php", data, nil})
-	tmpList = append(tmpList, &tmp{templateClassMap, dir + "autoload_classmap.php", data, nil})
-	tmpList = append(tmpList, &tmp{templateClassLoader, dir + "ClassLoader.php", data, nil})
-	tmpList = append(tmpList, &tmp{templatePsr4, dir + "autoload_psr4.php", data, nil})
+	tmpList = append(tmpList, &tmp{templateAutoLoad, dir + "/autoload.php", data, nil})
+	dir = filepath.Join(dir, "composer")
+	tmpList = append(tmpList, &tmp{templateReal, dir + "/autoload_real.php", data, nil})
+	tmpList = append(tmpList, &tmp{templateFiles, dir + "/autoload_files.php", data, nil})
+	tmpList = append(tmpList, &tmp{templateClassMap, dir + "/autoload_classmap.php", data, nil})
+	tmpList = append(tmpList, &tmp{templateClassLoader, dir + "/ClassLoader.php", data, nil})
+	tmpList = append(tmpList, &tmp{templatePsr4, dir + "/autoload_psr4.php", data, nil})
 	var wg sync.WaitGroup
 	for _, v := range tmpList {
 		wg.Add(1)

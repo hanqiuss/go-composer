@@ -110,6 +110,8 @@ func JsonDataToFile(f string, data interface{}) error {
 	if err != nil {
 		return fmt.Errorf("json Indent error %s", err)
 	}
+
+	f = filepath.Join(Conf.Cwd, f)
 	_ = os.MkdirAll(filepath.Dir(f), os.ModePerm)
 	err = ioutil.WriteFile(f, buf.Bytes(), os.ModePerm)
 	if err != nil {
