@@ -31,3 +31,11 @@ go-composer -d=../test -lockonly -php=7.2.25 -pro
 | `-php=<version>`   | 指定`php`版本            |
 | `-pro`             | 不安装require-dev包          |
 | `-cp`             | create project 创建项目 需要指定目录 -d 参数         |
+
+
+待处理问题
+---
+
+版本对比工具是用别的语言的改的，并没有完全匹配php的版本规则
+
+目前版本依赖算法提供的是 ```最新版本``` 方案，而php composer 返回的是 ```最少安装``` 方案
